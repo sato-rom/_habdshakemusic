@@ -1,0 +1,3480 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>顔認証・入退出サウンドシステム（クラウド同期対応）</title>
+
+  <!-- TensorFlow.js & COCO-SSD（人物検知・通過方向判定AI） -->
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.17.0/dist/tf.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd@2.2.3/dist/coco-ssd.min.js"></script>
+  <!-- face-api.js（ブラウザ完結型・顔認証AI） -->
+  <script src="https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7.13/dist/face-api.js"></script>
+
+  <!-- Firebase App & Firestore SDK (compat版で単一HTMLファイルから即利用可能) -->
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background: #0f172a;
+      color: #f8fafc;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      min-height: 100dvh;
+      padding: 16px 14px 56px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    /* 起動オーバーレイ */
+    #startOverlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(11, 15, 25, 0.96);
+      z-index: 9999;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      text-align: center;
+      gap: 16px;
+    }
+
+    #startBtn {
+      padding: 18px 36px;
+      font-size: 1.2rem;
+      font-weight: bold;
+      color: #fff;
+      background: linear-gradient(135deg, #06b6d4, #3b82f6);
+      border: none;
+      border-radius: 50px;
+      box-shadow: 0 10px 25px rgba(59, 130, 246, 0.45);
+      cursor: pointer;
+    }
+
+    #startBtn:disabled {
+      opacity: 0.6;
+      cursor: wait;
+    }
+
+    /* 右上の超小型カメラワイプ */
+    #cameraPipWrapper {
+      position: fixed;
+      top: 12px;
+      right: 12px;
+      width: 116px;
+      height: 87px;
+      border-radius: 12px;
+      overflow: hidden;
+      border: 2px solid #334155;
+      background: #020617;
+      z-index: 900;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+      transition: opacity 0.2s ease, transform 0.2s ease, border-color 0.15s ease;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    #cameraPipWrapper.hidden-cam {
+      opacity: 0;
+      pointer-events: none;
+      transform: scale(0.8);
+    }
+
+    #cameraPipWrapper.person-active {
+      border-color: #10b981;
+      box-shadow: 0 0 14px rgba(16, 185, 129, 0.75);
+    }
+
+    #cameraPipWrapper.person-unverified {
+      border-color: #f59e0b;
+    }
+
+    #webcamVideo, #overlayCanvas {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    .cam-side-tag {
+      position: absolute;
+      bottom: 3px;
+      z-index: 3;
+      font-size: 0.62rem;
+      font-weight: bold;
+      background: rgba(15, 23, 42, 0.78);
+      color: #38bdf8;
+      padding: 1px 5px;
+      border-radius: 4px;
+      pointer-events: none;
+    }
+    .cam-side-left { left: 4px; }
+    .cam-side-right { right: 4px; }
+
+    #camOffBadge {
+      position: relative;
+      z-index: 2;
+      font-size: 0.7rem;
+      font-weight: bold;
+      color: #94a3b8;
+      text-align: center;
+      padding: 4px;
+      display: none;
+    }
+
+    #cameraPipWrapper.cam-stopped #camOffBadge {
+      display: block;
+    }
+
+    /* 左上のハンバーガーメニューボタン */
+    #menuToggleBtn {
+      width: 44px;
+      height: 44px;
+      border-radius: 12px;
+      background: #1e293b;
+      border: 1px solid #334155;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 5px;
+      cursor: pointer;
+      flex-shrink: 0;
+    }
+
+    #menuToggleBtn span {
+      display: block;
+      width: 22px;
+      height: 2.5px;
+      background: #38bdf8;
+      border-radius: 2px;
+    }
+
+    /* スライドメニュー（ドロワー） */
+    #drawerBackdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.65);
+      z-index: 2000;
+      display: none;
+    }
+
+    #drawerBackdrop.open {
+      display: block;
+    }
+
+    #navDrawer {
+      position: fixed;
+      top: 0;
+      left: 0;
+      bottom: 0;
+      width: 270px;
+      background: #1e293b;
+      border-right: 1px solid #334155;
+      z-index: 2001;
+      padding: 24px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      transform: translateX(-100%);
+      transition: transform 0.22s ease;
+    }
+
+    #navDrawer.open {
+      transform: translateX(0);
+    }
+
+    .drawer-title {
+      font-size: 1.05rem;
+      font-weight: bold;
+      color: #94a3b8;
+      padding-bottom: 10px;
+      border-bottom: 1px solid #334155;
+      margin-bottom: 4px;
+    }
+
+    .nav-item-btn {
+      width: 100%;
+      text-align: left;
+      padding: 14px 16px;
+      border-radius: 12px;
+      border: 1px solid transparent;
+      background: #0f172a;
+      color: #f8fafc;
+      font-size: 0.96rem;
+      font-weight: bold;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .nav-item-btn.active {
+      background: rgba(56, 189, 248, 0.15);
+      border-color: #38bdf8;
+      color: #38bdf8;
+    }
+
+    /* メインコンテナ＆ヘッダー */
+    .container {
+      width: 100%;
+      max-width: 480px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding-right: 124px;
+      min-height: 46px;
+    }
+
+    h1 {
+      font-size: 1.12rem;
+      color: #38bdf8;
+      white-space: nowrap;
+    }
+
+    .screen-view {
+      display: none;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    .screen-view.active {
+      display: flex;
+    }
+
+    .card {
+      background: #1e293b;
+      border: 1px solid #334155;
+      border-radius: 18px;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    /* クラウド同期＆顔認証ステータスバッジ */
+    .sync-status-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      background: #09101f;
+      border: 1px solid #26354d;
+      border-radius: 10px;
+      padding: 7px 11px;
+      font-size: 0.76rem;
+      color: #94a3b8;
+    }
+
+    .face-auth-banner {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      background: #0f172a;
+      border: 1px solid #334155;
+      border-radius: 12px;
+      padding: 9px 12px;
+      font-size: 0.82rem;
+    }
+
+    .auth-pill {
+      padding: 3px 9px;
+      border-radius: 99px;
+      font-size: 0.75rem;
+      font-weight: bold;
+      white-space: nowrap;
+    }
+
+    .auth-pill.on {
+      background: rgba(16, 185, 129, 0.2);
+      color: #10b981;
+      border: 1px solid rgba(16, 185, 129, 0.45);
+    }
+
+    .auth-pill.off {
+      background: rgba(148, 163, 184, 0.15);
+      color: #94a3b8;
+      border: 1px solid #475569;
+    }
+
+    /* カウント＆1日の上限ステータス表示 */
+    .status-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+
+    .stat-box {
+      background: #0f172a;
+      border: 1px solid #334155;
+      border-radius: 14px;
+      padding: 12px 10px;
+      text-align: center;
+      transition: border-color 0.15s ease, background 0.15s ease;
+    }
+
+    .stat-box.highlight {
+      border-color: #10b981;
+      background: rgba(16, 185, 129, 0.14);
+    }
+
+    .stat-box.pulse {
+      border-color: #f59e0b;
+      background: rgba(245, 158, 11, 0.16);
+    }
+
+    .stat-label {
+      font-size: 0.78rem;
+      color: #94a3b8;
+    }
+
+    .stat-value {
+      font-size: 1.65rem;
+      font-weight: 800;
+      color: #38bdf8;
+      margin-top: 2px;
+    }
+
+    .stat-sub {
+      font-size: 0.85rem;
+      color: #cbd5e1;
+      font-weight: normal;
+    }
+
+    #systemStatus {
+      font-size: 0.82rem;
+      text-align: center;
+      padding: 9px 10px;
+      border-radius: 10px;
+      background: #0f172a;
+      color: #38bdf8;
+      border: 1px solid #334155;
+      word-break: break-all;
+    }
+
+    /* リアルタイム音量メーターバー */
+    .live-vol-wrap {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.76rem;
+      color: #94a3b8;
+    }
+
+    .live-vol-track {
+      flex: 1;
+      height: 6px;
+      background: #0f172a;
+      border-radius: 99px;
+      overflow: hidden;
+      border: 1px solid #334155;
+    }
+
+    #liveVolBar {
+      width: 0%;
+      height: 100%;
+      background: linear-gradient(90deg, #38bdf8, #10b981);
+      transition: width 0.08s linear;
+    }
+
+    /* アクションボタン群 */
+    .btn-row {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .btn {
+      flex: 1;
+      min-width: 100px;
+      padding: 11px 8px;
+      border-radius: 12px;
+      border: none;
+      font-size: 0.82rem;
+      font-weight: bold;
+      cursor: pointer;
+    }
+
+    .btn-cam-power { background: #0284c7; color: #fff; }
+    .btn-cam-power.off-state { background: #334155; color: #cbd5e1; border: 1px solid #475569; }
+    .btn-cam { background: #334155; color: #f8fafc; border: 1px solid #475569; }
+    .btn-enter { background: #10b981; color: #0f172a; }
+    .btn-exit { background: #f59e0b; color: #0f172a; }
+    .btn-stop { background: #ef4444; color: #fff; }
+    .btn-reset { background: #0f172a; color: #cbd5e1; border: 1px solid #475569; }
+    .btn-face-reg { background: linear-gradient(135deg, #10b981, #059669); color: #fff; padding: 13px; font-size: 0.92rem; }
+
+    /* 歩く速さプリセットボタン */
+    .speed-preset-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+    }
+
+    .speed-btn {
+      background: #0f172a;
+      border: 1.5px solid #334155;
+      border-radius: 12px;
+      padding: 10px 6px;
+      color: #cbd5e1;
+      font-size: 0.8rem;
+      font-weight: bold;
+      cursor: pointer;
+      text-align: center;
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+    }
+
+    .speed-btn.active {
+      border-color: #38bdf8;
+      background: rgba(56, 189, 248, 0.16);
+      color: #38bdf8;
+    }
+
+    /* 顔認証設定画面用スタイル */
+    .face-preview-box {
+      position: relative;
+      width: 100%;
+      aspect-ratio: 4 / 3;
+      background: #020617;
+      border-radius: 14px;
+      overflow: hidden;
+      border: 2px solid #334155;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    #faceMirrorCanvas {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    .face-list-grid {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .registered-face-card {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      background: #0f172a;
+      border: 1px solid #334155;
+      border-radius: 12px;
+      padding: 10px 12px;
+    }
+
+    .registered-face-card.matched-now {
+      border-color: #10b981;
+      background: rgba(16, 185, 129, 0.16);
+    }
+
+    .face-thumb {
+      width: 48px;
+      height: 48px;
+      border-radius: 10px;
+      object-fit: cover;
+      background: #1e293b;
+      border: 1px solid #475569;
+      flex-shrink: 0;
+    }
+
+    /* ワンタップ効果音パッド（4ボタン） */
+    .sfx-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 10px;
+    }
+
+    .sfx-pad-btn {
+      background: #0f172a;
+      border: 1.5px solid #334155;
+      border-radius: 14px;
+      padding: 14px 10px;
+      color: #f8fafc;
+      font-weight: bold;
+      cursor: pointer;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+      transition: transform 0.08s ease, border-color 0.15s ease, background 0.15s ease;
+      user-select: none;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    .sfx-pad-btn:active, .sfx-pad-btn.active-sfx {
+      transform: scale(0.96);
+      border-color: #f59e0b;
+      background: rgba(245, 158, 11, 0.2);
+    }
+
+    .sfx-emoji { font-size: 1.55rem; line-height: 1.1; }
+    .sfx-name { font-size: 0.95rem; color: #f8fafc; }
+    .sfx-file { font-size: 0.68rem; color: #64748b; }
+
+    /* トグルスイッチ */
+    .toggle-switch {
+      position: relative;
+      display: inline-block;
+      width: 48px;
+      height: 26px;
+      flex-shrink: 0;
+    }
+
+    .toggle-switch input { opacity: 0; width: 0; height: 0; }
+
+    .toggle-slider {
+      position: absolute;
+      cursor: pointer;
+      inset: 0;
+      background-color: #334155;
+      border-radius: 34px;
+      transition: 0.2s;
+    }
+
+    .toggle-slider::before {
+      position: absolute;
+      content: "";
+      height: 20px;
+      width: 20px;
+      left: 3px;
+      bottom: 3px;
+      background-color: #f8fafc;
+      border-radius: 50%;
+      transition: 0.2s;
+    }
+
+    .toggle-switch input:checked + .toggle-slider { background-color: #10b981; }
+    .toggle-switch input:checked + .toggle-slider::before { transform: translateX(22px); }
+
+    /* メイン画面の曲リスト表示 */
+    .song-card-list {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .main-song-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      background: #0f172a;
+      border: 1px solid #334155;
+      padding: 12px 14px;
+      border-radius: 12px;
+      cursor: pointer;
+    }
+
+    .main-song-item.playing {
+      border-color: #10b981;
+      background: rgba(16, 185, 129, 0.16);
+    }
+
+    .main-song-title {
+      font-size: 0.92rem;
+      font-weight: bold;
+      color: #f8fafc;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .main-song-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 5px;
+      margin-top: 5px;
+      font-size: 0.72rem;
+    }
+
+    .meta-tag {
+      background: #1e293b;
+      padding: 2px 7px;
+      border-radius: 6px;
+      color: #cbd5e1;
+    }
+
+    .meta-tag.accent {
+      background: rgba(245, 158, 11, 0.18);
+      color: #fbbf24;
+      border: 1px solid rgba(245, 158, 11, 0.35);
+    }
+
+    .meta-tag.github {
+      background: rgba(56, 189, 248, 0.15);
+      color: #38bdf8;
+      border: 1px solid rgba(56, 189, 248, 0.3);
+    }
+
+    .play-pill {
+      background: #1e293b;
+      color: #38bdf8;
+      border: 1px solid #38bdf8;
+      padding: 6px 11px;
+      border-radius: 20px;
+      font-size: 0.75rem;
+      font-weight: bold;
+      white-space: nowrap;
+    }
+
+    /* 設定画面のコントロール行 */
+    .ctrl-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      font-size: 0.86rem;
+    }
+
+    .num-control {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .step-btn {
+      width: 34px;
+      height: 34px;
+      border-radius: 50%;
+      border: 1px solid #475569;
+      background: #0f172a;
+      color: #f8fafc;
+      font-size: 1.05rem;
+      font-weight: bold;
+      cursor: pointer;
+    }
+
+    .val-badge {
+      font-size: 0.9rem;
+      font-weight: bold;
+      color: #f59e0b;
+      min-width: 74px;
+      text-align: center;
+    }
+
+    input[type="range"] {
+      flex: 1;
+      accent-color: #38bdf8;
+    }
+
+    select.select-input {
+      background: #0f172a;
+      color: #f8fafc;
+      border: 1px solid #475569;
+      border-radius: 10px;
+      padding: 7px 9px;
+      font-size: 0.82rem;
+      max-width: 200px;
+    }
+
+    /* 入力フォーム */
+    .url-input-col {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .text-input {
+      width: 100%;
+      background: #0f172a;
+      border: 1px solid #475569;
+      color: #f8fafc;
+      padding: 10px 12px;
+      border-radius: 10px;
+      font-size: 0.85rem;
+    }
+
+    #addUrlBtn {
+      background: #38bdf8;
+      color: #0f172a;
+      border: none;
+      padding: 11px;
+      border-radius: 10px;
+      font-weight: bold;
+      font-size: 0.9rem;
+      cursor: pointer;
+    }
+
+    /* 1曲ごとの個別編集カード */
+    .setting-song-card {
+      background: #0f172a;
+      border: 1px solid #334155;
+      border-radius: 14px;
+      padding: 13px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .setting-song-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+
+    .setting-song-actions {
+      display: flex;
+      gap: 6px;
+      flex-shrink: 0;
+    }
+
+    .mini-btn {
+      border: none;
+      border-radius: 8px;
+      padding: 5px 9px;
+      font-size: 0.75rem;
+      font-weight: bold;
+      cursor: pointer;
+    }
+
+    .mini-play { background: #10b981; color: #0f172a; }
+    .mini-del { background: #334155; color: #f87171; }
+
+    .per-song-ctrl {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      font-size: 0.81rem;
+      color: #cbd5e1;
+      padding-top: 7px;
+      border-top: 1px dashed #1e293b;
+    }
+
+    .sub-box {
+      background: #162032;
+      border: 1px solid #26354d;
+      border-radius: 10px;
+      padding: 9px 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .sub-box-title {
+      font-size: 0.78rem;
+      font-weight: bold;
+      color: #fbbf24;
+    }
+
+    .time-range-inputs {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .sec-num-input {
+      width: 58px;
+      background: #0f172a;
+      border: 1px solid #475569;
+      color: #f8fafc;
+      padding: 5px 6px;
+      border-radius: 8px;
+      font-size: 0.82rem;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- 起動オーバーレイ -->
+  <div id="startOverlay">
+    <h2 style="font-size: 1.5rem; color: #38bdf8;">👤 顔認証・入退出サウンド</h2>
+    <p style="color: #94a3b8; font-size: 0.9rem; line-height: 1.6;">
+      Firebase Firestore クラウド自動同期対応。<br>どのスマホ・PCから開いても顔データと曲設定が共有されます。
+    </p>
+    <button id="startBtn" type="button">▶ システムを起動する</button>
+    <div id="loadingMsg" style="font-size: 0.85rem; color: #f59e0b;"></div>
+  </div>
+
+  <!-- 左上メニューの背景＆スライドドロワー -->
+  <div id="drawerBackdrop"></div>
+  <nav id="navDrawer">
+    <div class="drawer-title">画面切り替えメニュー</div>
+    <button class="nav-item-btn active" data-target="mainScreen" type="button">
+      <span>🎵</span><span>メイン（状況・効果音・曲）</span>
+    </button>
+    <button class="nav-item-btn" data-target="faceAuthScreen" type="button">
+      <span>👤</span><span>顔認証設定（全端末共有）</span>
+    </button>
+    <button class="nav-item-btn" data-target="settingsScreen" type="button">
+      <span>⚙️</span><span>設定（クラウド同期・曲・時間）</span>
+    </button>
+  </nav>
+
+  <!-- 右上の超小型カメラワイプ -->
+  <div id="cameraPipWrapper">
+    <video id="webcamVideo" autoplay muted playsinline></video>
+    <canvas id="overlayCanvas"></canvas>
+    <span class="cam-side-tag cam-side-left" id="camLeftTag">入 ➔</span>
+    <span class="cam-side-tag cam-side-right" id="camRightTag">⬅ 出</span>
+    <div id="camOffBadge">📷 カメラOFF</div>
+  </div>
+
+  <div class="container">
+    <!-- ヘッダー（左上に3本線ボタン） -->
+    <header>
+      <button id="menuToggleBtn" type="button" aria-label="メニューを開く">
+        <span></span>
+        <span></span>
+        <span></span>
+      </button>
+      <h1 id="pageTitle">🎵 メイン画面</h1>
+    </header>
+
+    <!-- ==========================================
+         画面1：メイン画面
+         ========================================== -->
+    <div id="mainScreen" class="screen-view active">
+      <div class="card">
+        <!-- クラウド同期ステータスバー -->
+        <div class="sync-status-bar">
+          <span id="cloudSyncStatusText">☁️ 同期状態を確認中...</span>
+          <button type="button" class="mini-btn" id="manualCloudPullBtn" style="background:#1e293b; color:#38bdf8; border:1px solid #334155;">🔄 再同期</button>
+        </div>
+
+        <!-- 現在の顔認証モード＆最新認証者表示 -->
+        <div class="face-auth-banner" id="mainFaceBanner">
+          <div>
+            <span style="color: #94a3b8;">👤 認証状況: </span>
+            <strong id="mainMatchedName" style="color: #f8fafc;">待機中</strong>
+          </div>
+          <span class="auth-pill on" id="mainAuthStatePill">認証ON（0名登録）</span>
+        </div>
+
+        <div class="status-grid">
+          <div class="stat-box" id="countStatBox">
+            <div class="stat-label">認証入室カウント / 目標</div>
+            <div class="stat-value">
+              <span id="currentCount">0</span><span class="stat-sub"> / <span id="targetCountHud">3</span>人</span>
+            </div>
+          </div>
+          <div class="stat-box" id="dailyStatBox">
+            <div class="stat-label">本日の再生 / 1日上限</div>
+            <div class="stat-value">
+              <span id="dailyPlayed">0</span><span class="stat-sub"> / <span id="dailyLimitHud">10</span>回</span>
+            </div>
+          </div>
+        </div>
+
+        <div id="systemStatus">⏳ 起動待機中...</div>
+
+        <!-- 現在の音量レベル表示 -->
+        <div class="live-vol-wrap">
+          <span>🔊 出力音量:</span>
+          <div class="live-vol-track"><div id="liveVolBar"></div></div>
+          <span id="liveVolText" style="width: 38px; text-align: right;">0%</span>
+        </div>
+
+        <div class="btn-row">
+          <button class="btn btn-cam-power" id="toggleCamPowerBtn" type="button">📷 カメラ停止（完全OFF）</button>
+          <button class="btn btn-cam" id="toggleCamViewBtn" type="button">🙈 ワイプ隠す</button>
+        </div>
+        <div class="btn-row">
+          <button class="btn btn-enter" id="testEnterBtn" type="button">➡ 入室曲テスト</button>
+          <button class="btn btn-exit" id="testExitBtn" type="button">⬅ 退出曲テスト</button>
+          <button class="btn btn-stop" id="stopMusicBtn" type="button">⏹ 全停止</button>
+        </div>
+      </div>
+
+      <!-- ワンタップ効果音パッド -->
+      <div class="card">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <span style="font-size: 0.95rem; font-weight: bold; color: #fbbf24;">⚡ 効果音ワンタップ再生</span>
+          <span style="font-size: 0.75rem; color: #94a3b8;">曲と重ねて再生OK</span>
+        </div>
+        <div class="sfx-grid" id="sfxPadGrid"></div>
+      </div>
+
+      <!-- 設定されている曲の一覧 -->
+      <div class="card">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <span style="font-size: 0.95rem; font-weight: bold; color: #38bdf8;">📋 設定されている曲（全端末共有）</span>
+          <span id="mainSongCountBadge" style="font-size: 0.8rem; color: #94a3b8;">0曲</span>
+        </div>
+        <div class="song-card-list" id="mainSongListContainer"></div>
+      </div>
+    </div>
+
+    <!-- ==========================================
+         画面2：顔認証設定画面
+         ========================================== -->
+    <div id="faceAuthScreen" class="screen-view">
+      <div class="card">
+        <div style="font-size: 0.95rem; font-weight: bold; color: #10b981;">🛡️ 顔認証フィルター設定（全端末自動同期）</div>
+
+        <div class="ctrl-row">
+          <div style="flex: 1;">
+            <div style="font-weight: bold;">登録した人の顔だけ反応させる</div>
+            <div style="font-size: 0.74rem; color: #94a3b8; margin-top: 2px;">
+              ここで登録・削除した顔データは自動でクラウドに保存され、他のスマホ・PCにも即反映されます
+            </div>
+          </div>
+          <label class="toggle-switch">
+            <input type="checkbox" id="faceAuthEnabledToggle" checked />
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+
+        <div class="ctrl-row" style="padding-top: 8px; border-top: 1px dashed #334155;">
+          <span style="white-space: nowrap;">🎯 一致判定のゆるさ:</span>
+          <input type="range" id="faceThresholdSlider" min="40" max="75" value="58" />
+          <span id="faceThresholdVal" style="width: 44px; text-align: right; color: #f59e0b; font-weight: bold;">0.58</span>
+        </div>
+        <div id="faceScoreLiveDebug" style="font-size: 0.76rem; color: #38bdf8; background: #0f172a; padding: 7px 10px; border-radius: 8px; border: 1px solid #334155;">
+          🔍 リアルタイム一致スコア: カメラに顔を映すと表示されます（設定値以下で認証OK）
+        </div>
+      </div>
+
+      <!-- カメラから新しい顔を登録 -->
+      <div class="card">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <span style="font-size: 0.95rem; font-weight: bold; color: #38bdf8;">📸 カメラから顔を登録する</span>
+          <span id="faceLiveDetectBadge" style="font-size: 0.75rem; color: #f59e0b;">カメラ待機中</span>
+        </div>
+
+        <div class="face-preview-box">
+          <canvas id="faceMirrorCanvas"></canvas>
+        </div>
+
+        <div class="url-input-col">
+          <input type="text" id="newFaceNameInput" class="text-input" placeholder="登録する人の名前（同じ名前で複数角度を追加登録できます）" />
+          <button class="btn btn-face-reg" id="registerFaceBtn" type="button">📸 今のカメラ映像から顔を登録する</button>
+        </div>
+        <div id="faceRegFeedback" style="font-size: 0.8rem; text-align: center; color: #94a3b8;">
+          カメラに1人の顔を映した状態でボタンを押してください。
+        </div>
+      </div>
+
+      <!-- 登録済みの顔一覧 -->
+      <div class="card">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <span style="font-size: 0.95rem; font-weight: bold; color: #38bdf8;">👥 登録済みの顔リスト（クラウド共有中）</span>
+          <span id="registeredFaceCountBadge" style="font-size: 0.8rem; color: #94a3b8;">0名</span>
+        </div>
+        <div class="face-list-grid" id="registeredFaceListContainer"></div>
+      </div>
+    </div>
+
+    <!-- ==========================================
+         画面3：一般設定画面
+         ========================================== -->
+    <div id="settingsScreen" class="screen-view">
+      <!-- クラウド共有ルームID設定 -->
+      <div class="card">
+        <div style="font-size: 0.95rem; font-weight: bold; color: #10b981;">☁️ 複数機器の自動同期（Firebase Firestore）</div>
+        <div style="font-size: 0.75rem; color: #94a3b8; line-height: 1.45;">
+          同じ「共有グループID」を設定したスマホ・PC同士で、顔データ・曲リスト・各種設定が自動的に同期されます。
+        </div>
+        <div class="ctrl-row">
+          <span style="white-space: nowrap;">🔑 共有グループID:</span>
+          <input type="text" id="syncGroupIdInput" class="text-input" style="max-width: 190px; padding: 7px 10px;" value="default_room" />
+          <button type="button" class="mini-btn mini-play" id="applySyncGroupBtn">接続</button>
+        </div>
+        <div id="settingsSyncDetail" style="font-size: 0.75rem; color: #38bdf8;">接続状態を確認中...</div>
+      </div>
+
+      <!-- 曲再生中に流れるカウント音の設定 -->
+      <div class="card">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <span style="font-size: 0.95rem; font-weight: bold; color: #38bdf8;">⏱️ 曲再生中のカウント音設定</span>
+          <button class="mini-btn mini-play" id="testCountSoundBtn" type="button">▶ 試聴</button>
+        </div>
+
+        <div class="ctrl-row">
+          <span>📍 カウントを入れる時期:</span>
+          <select id="countTimingMode" class="select-input">
+            <option value="end">曲が終わる直前（最後から）</option>
+            <option value="start">曲が始まってすぐ（最初から）</option>
+            <option value="custom_sec">開始から指定秒数後に鳴らす</option>
+          </select>
+        </div>
+
+        <div class="ctrl-row" id="countCustomOffsetRow" style="display: none;">
+          <span>⏱️ 開始から何秒後に鳴らすか:</span>
+          <div class="num-control">
+            <button class="step-btn" id="countOffsetMinusBtn" type="button">−</button>
+            <span class="val-badge" id="countOffsetDisplay">0秒後</span>
+            <button class="step-btn" id="countOffsetPlusBtn" type="button">＋</button>
+          </div>
+        </div>
+
+        <div class="ctrl-row">
+          <span>⏳ カウントを鳴らす長さ:</span>
+          <div class="num-control">
+            <button class="step-btn" id="countDurMinusBtn" type="button">−</button>
+            <span class="val-badge" id="countDurDisplay">5秒間</span>
+            <button class="step-btn" id="countDurPlusBtn" type="button">＋</button>
+          </div>
+        </div>
+
+        <div class="ctrl-row">
+          <span>🥁 カウントの速さ (BPM):</span>
+          <div class="num-control">
+            <button class="step-btn" id="bpmMinusBtn" type="button">−</button>
+            <span class="val-badge" id="bpmDisplay">120 BPM</span>
+            <button class="step-btn" id="bpmPlusBtn" type="button">＋</button>
+          </div>
+        </div>
+        <div class="ctrl-row" style="margin-top: -4px;">
+          <span style="font-size: 0.78rem; color: #94a3b8; white-space: nowrap;">BPMスライダー:</span>
+          <input type="range" id="bpmSlider" min="40" max="240" value="120" />
+        </div>
+
+        <div class="ctrl-row">
+          <span>🔔 音の種類:</span>
+          <select id="countSoundType" class="select-input">
+            <option value="beep">ピッ（電子音）</option>
+            <option value="chime">ポーン（チャイム風）</option>
+            <option value="pop">ポッ（ソフト音）</option>
+          </select>
+        </div>
+
+        <div class="ctrl-row">
+          <span style="white-space: nowrap;">🔊 カウント音の大きさ:</span>
+          <input type="range" id="countVolumeSlider" min="0" max="100" value="70" />
+          <span id="countVolumeVal" style="width: 42px; text-align: right;">70%</span>
+        </div>
+      </div>
+
+      <!-- ワンタップ効果音パッド設定 -->
+      <div class="card">
+        <div style="font-size: 0.95rem; font-weight: bold; color: #fbbf24;">⚡ 効果音ボタン（拍手・パフ等）のファイル設定</div>
+        <div style="font-size: 0.75rem; color: #94a3b8; line-height: 1.45;">
+          ※ 拍手やパフが鳴らない場合は、GitHubに置いた実際のファイル名（またはDropboxリンク）に合わせて書き換えてください。
+        </div>
+
+        <div class="ctrl-row">
+          <span style="white-space: nowrap;">🔊 効果音の大きさ:</span>
+          <input type="range" id="sfxVolumeSlider" min="0" max="100" value="90" />
+          <span id="sfxVolumeVal" style="width: 42px; text-align: right;">90%</span>
+        </div>
+
+        <div id="sfxConfigList" style="display: flex; flex-direction: column; gap: 8px; padding-top: 6px; border-top: 1px dashed #334155;"></div>
+      </div>
+
+      <!-- 歩く速さ・通過感度設定 -->
+      <div class="card">
+        <div style="font-size: 0.95rem; font-weight: bold; color: #38bdf8;">🏃 歩く速さ・通過感度設定</div>
+
+        <div class="speed-preset-grid">
+          <button type="button" class="speed-btn" data-speed="fast">
+            <span>💨 速歩き</span>
+            <span style="font-size: 0.68rem; opacity: 0.8;">短い移動で即反応</span>
+          </button>
+          <button type="button" class="speed-btn active" data-speed="normal">
+            <span>🚶 普通</span>
+            <span style="font-size: 0.68rem; opacity: 0.8;">標準バランス</span>
+          </button>
+          <button type="button" class="speed-btn" data-speed="slow">
+            <span>🐢 ゆっくり</span>
+            <span style="font-size: 0.68rem; opacity: 0.8;">長めに見失い防止</span>
+          </button>
+        </div>
+
+        <div class="ctrl-row" style="padding-top: 8px; border-top: 1px dashed #334155;">
+          <span style="white-space: nowrap;">📏 通過判定の移動量:</span>
+          <input type="range" id="moveThresholdSlider" min="5" max="35" value="12" />
+          <span id="moveThresholdVal" style="width: 44px; text-align: right; color: #f59e0b; font-weight: bold;">12%</span>
+        </div>
+
+        <div class="ctrl-row">
+          <span style="white-space: nowrap;">⏱️ 追跡の保持時間:</span>
+          <input type="range" id="trackHoldSlider" min="8" max="50" value="25" />
+          <span id="trackHoldVal" style="width: 44px; text-align: right; color: #f59e0b; font-weight: bold;">2.5秒</span>
+        </div>
+      </div>
+
+      <!-- 入退出の方向＆曲割り当て設定 -->
+      <div class="card">
+        <div style="font-size: 0.95rem; font-weight: bold; color: #10b981;">🚪 入退出の方向判定・曲割り当て設定</div>
+
+        <div class="ctrl-row">
+          <span>🧭 入室と判定する向き:</span>
+          <select id="enterDirectionSelect" class="select-input">
+            <option value="left_to_right">画面の 左 ➔ 右 を「入室」</option>
+            <option value="right_to_left">画面の 右 ➔ 左 を「入室」</option>
+          </select>
+        </div>
+
+        <div class="ctrl-row">
+          <span>➡ 入室時に流す曲:</span>
+          <select id="enterSoundSelect" class="select-input"></select>
+        </div>
+
+        <div class="ctrl-row">
+          <span>⬅ 退出時に流す曲:</span>
+          <select id="exitSoundSelect" class="select-input"></select>
+        </div>
+
+        <div class="ctrl-row">
+          <div style="flex: 1;">
+            <div style="font-weight: bold;">退出時は人数カウントに関係なく即曲を鳴らす</div>
+            <div style="font-size: 0.73rem; color: #94a3b8;">OFFにすると入室と同じ人数カウントで鳴ります</div>
+          </div>
+          <label class="toggle-switch">
+            <input type="checkbox" id="exitImmediateToggle" checked />
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+      </div>
+
+      <!-- カメラ動作設定 -->
+      <div class="card">
+        <div style="font-size: 0.95rem; font-weight: bold; color: #38bdf8;">📷 カメラ起動ルール設定</div>
+
+        <div class="ctrl-row">
+          <div style="flex: 1;">
+            <div style="font-weight: bold;">設定画面では自動でカメラOFF</div>
+            <div style="font-size: 0.75rem; color: #94a3b8; margin-top: 2px;">
+              この設定画面を開いている間はカメラを止め、メインや顔認証画面に戻ると自動再開します
+            </div>
+          </div>
+          <label class="toggle-switch">
+            <input type="checkbox" id="autoOffInSettingsToggle" checked />
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+
+        <div class="ctrl-row" style="padding-top: 8px; border-top: 1px dashed #334155;">
+          <span>現在のカメラ状態:</span>
+          <button class="mini-btn mini-play" id="settingsCamToggleBtn" type="button">📷 カメラON / OFF切替</button>
+        </div>
+      </div>
+
+      <!-- 検知回数＆1日上限設定 -->
+      <div class="card">
+        <div style="font-size: 0.95rem; font-weight: bold; color: #38bdf8;">🚶 検知カウント・1日上限設定</div>
+
+        <div class="ctrl-row">
+          <span>🎯 入室曲を鳴らすまでの人数:</span>
+          <div class="num-control">
+            <button class="step-btn" id="targetMinusBtn" type="button">−</button>
+            <span class="val-badge" id="targetCountDisplay">3人</span>
+            <button class="step-btn" id="targetPlusBtn" type="button">＋</button>
+          </div>
+        </div>
+
+        <div class="ctrl-row">
+          <span>📅 1日の再生上限:</span>
+          <div class="num-control">
+            <button class="step-btn" id="dailyMinusBtn" type="button">−</button>
+            <span class="val-badge" id="dailyLimitDisplay">10回</span>
+            <button class="step-btn" id="dailyPlusBtn" type="button">＋</button>
+          </div>
+        </div>
+
+        <div class="ctrl-row">
+          <span>⏳ 再検知の待ち時間:</span>
+          <div class="num-control">
+            <button class="step-btn" id="coolMinusBtn" type="button">−</button>
+            <span class="val-badge" id="cooldownDisplay">3秒</span>
+            <button class="step-btn" id="coolPlusBtn" type="button">＋</button>
+          </div>
+        </div>
+
+        <div class="btn-row" style="margin-top: 4px;">
+          <button class="btn btn-reset" id="resetCountBtn" type="button">🔄 検知カウント0</button>
+          <button class="btn btn-reset" id="resetDailyBtn" type="button">📅 本日再生数0</button>
+        </div>
+      </div>
+
+      <!-- 外部リンクURL・GitHubファイル追加＆1曲ごとの個別設定 -->
+      <div class="card">
+        <div style="font-size: 0.95rem; font-weight: bold; color: #38bdf8;">🎵 曲リストの追加・個別設定（全端末共有）</div>
+        <div style="font-size: 0.76rem; color: #94a3b8; line-height: 1.45;">
+          ※ GitHubメイン直下のファイル名、またはDropbox共有リンク（自動で再生用URLに変換されます）を入力できます。
+        </div>
+
+        <div class="url-input-col">
+          <input type="text" id="newTitleInput" class="text-input" placeholder="表示名（省略可）" />
+          <input type="text" id="newUrlInput" class="text-input" placeholder="GitHubファイル名・Dropbox共有リンク・外部URL" />
+          <button id="addUrlBtn" type="button">＋ 曲リストに追加する</button>
+        </div>
+
+        <div class="song-card-list" id="settingSongListContainer" style="margin-top: 6px;"></div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // =========================================================
+    // ★ 1. ご自身のFirebaseプロジェクト設定をここに貼り付けてください
+    // （Firebase Console > プロジェクト設定 > マイアプリ > SDKの設定と構成）
+    // =========================================================
+    const FIREBASE_CONFIG = {
+       apiKey: "AIzaSyBXIOyPImlqiPAX-4JbZ_LNZrzT9_SIazc",
+    authDomain: "sotugyouken-2ec79.firebaseapp.com",
+    databaseURL: "https://sotugyouken-2ec79-default-rtdb.asia-southeast1.firebasedatabase.app",
+    projectId: "sotugyouken-2ec79",
+    storageBucket: "sotugyouken-2ec79.firebasestorage.app",
+    messagingSenderId: "682579514497",
+    appId: "1:682579514497:web:f4f3cb5b33637d7dade980",
+    measurementId: "G-6SXYHSS0H8"
+    };
+
+    // =========================================================
+    // ★ 2. 顔認証AIモデル配信元（vladmandic/face-api 公式CDN）
+    // =========================================================
+    const FACE_MODEL_URL = "https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7.13/model";
+
+    // =========================================================
+    // ★ 3. ワンタップ効果音ボタン初期定義
+    // =========================================================
+    const DEFAULT_SFX_BUTTONS = [
+      { emoji: "🎉", label: "歓声", file: "./歓声と拍手1.mp3" },
+      { emoji: "👏", label: "拍手", file: "./大勢で拍手.mp3" },
+      { emoji: "📯", label: "ラッパ", file: "./パフ.mp3" },
+      { emoji: "✨", label: "キラッ", file: "./キラッ1.mp3" }
+    ];
+
+    const DEFAULT_SONGS = [
+      {
+        title: "サンプル音 1（フェード＋サビ強調例）",
+        url: "https://actions.google.com/sounds/v1/alarms/bugle_tune.ogg",
+        baseVolume: 35,
+        peakVolume: 100,
+        highlightStart: 3,
+        highlightEnd: 10,
+        fadeIn: 2,
+        fadeOut: 3,
+        duration: 15
+      },
+      {
+        title: "サンプル音 2（効果音）",
+        url: "https://actions.google.com/sounds/v1/cartoon/cartoon_boing.ogg",
+        baseVolume: 80,
+        peakVolume: 100,
+        highlightStart: 0,
+        highlightEnd: 0,
+        fadeIn: 0,
+        fadeOut: 1,
+        duration: 5
+      }
+    ];
+
+    const DURATION_STEPS = [0, 3, 5, 10, 15, 20, 30, 45, 60, 90, 120];
+    const FADE_STEPS = [0, 0.5, 1, 1.5, 2, 3, 4, 5, 7, 10];
+    const COUNT_DURATION_STEPS = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 15, 20, 30];
+
+    // DOM参照
+    const menuToggleBtn = document.getElementById("menuToggleBtn");
+    const drawerBackdrop = document.getElementById("drawerBackdrop");
+    const navDrawer = document.getElementById("navDrawer");
+    const navItemBtns = document.querySelectorAll(".nav-item-btn");
+    const screenViews = document.querySelectorAll(".screen-view");
+    const pageTitle = document.getElementById("pageTitle");
+
+    const cloudSyncStatusText = document.getElementById("cloudSyncStatusText");
+    const manualCloudPullBtn = document.getElementById("manualCloudPullBtn");
+    const syncGroupIdInput = document.getElementById("syncGroupIdInput");
+    const applySyncGroupBtn = document.getElementById("applySyncGroupBtn");
+    const settingsSyncDetail = document.getElementById("settingsSyncDetail");
+
+    const startOverlay = document.getElementById("startOverlay");
+    const startBtn = document.getElementById("startBtn");
+    const loadingMsg = document.getElementById("loadingMsg");
+    const cameraPipWrapper = document.getElementById("cameraPipWrapper");
+    const webcamVideo = document.getElementById("webcamVideo");
+    const overlayCanvas = document.getElementById("overlayCanvas");
+    const camLeftTag = document.getElementById("camLeftTag");
+    const camRightTag = document.getElementById("camRightTag");
+    const toggleCamPowerBtn = document.getElementById("toggleCamPowerBtn");
+    const toggleCamViewBtn = document.getElementById("toggleCamViewBtn");
+    const autoOffInSettingsToggle = document.getElementById("autoOffInSettingsToggle");
+    const settingsCamToggleBtn = document.getElementById("settingsCamToggleBtn");
+
+    // 歩く速さ設定DOM
+    const speedPresetBtns = document.querySelectorAll(".speed-btn");
+    const moveThresholdSlider = document.getElementById("moveThresholdSlider");
+    const moveThresholdVal = document.getElementById("moveThresholdVal");
+    const trackHoldSlider = document.getElementById("trackHoldSlider");
+    const trackHoldVal = document.getElementById("trackHoldVal");
+
+    // 顔認証設定DOM
+    const mainMatchedName = document.getElementById("mainMatchedName");
+    const mainAuthStatePill = document.getElementById("mainAuthStatePill");
+    const faceAuthEnabledToggle = document.getElementById("faceAuthEnabledToggle");
+    const faceThresholdSlider = document.getElementById("faceThresholdSlider");
+    const faceThresholdVal = document.getElementById("faceThresholdVal");
+    const faceScoreLiveDebug = document.getElementById("faceScoreLiveDebug");
+    const faceLiveDetectBadge = document.getElementById("faceLiveDetectBadge");
+    const faceMirrorCanvas = document.getElementById("faceMirrorCanvas");
+    const newFaceNameInput = document.getElementById("newFaceNameInput");
+    const registerFaceBtn = document.getElementById("registerFaceBtn");
+    const faceRegFeedback = document.getElementById("faceRegFeedback");
+    const registeredFaceCountBadge = document.getElementById("registeredFaceCountBadge");
+    const registeredFaceListContainer = document.getElementById("registeredFaceListContainer");
+
+    // 入退出設定DOM
+    const enterDirectionSelect = document.getElementById("enterDirectionSelect");
+    const enterSoundSelect = document.getElementById("enterSoundSelect");
+    const exitSoundSelect = document.getElementById("exitSoundSelect");
+    const exitImmediateToggle = document.getElementById("exitImmediateToggle");
+
+    // ステータス＆操作DOM
+    const countStatBox = document.getElementById("countStatBox");
+    const dailyStatBox = document.getElementById("dailyStatBox");
+    const currentCountEl = document.getElementById("currentCount");
+    const targetCountHud = document.getElementById("targetCountHud");
+    const dailyPlayedEl = document.getElementById("dailyPlayed");
+    const dailyLimitHud = document.getElementById("dailyLimitHud");
+    const systemStatus = document.getElementById("systemStatus");
+    const liveVolBar = document.getElementById("liveVolBar");
+    const liveVolText = document.getElementById("liveVolText");
+    const sfxPadGrid = document.getElementById("sfxPadGrid");
+    const sfxConfigList = document.getElementById("sfxConfigList");
+
+    const targetMinusBtn = document.getElementById("targetMinusBtn");
+    const targetPlusBtn = document.getElementById("targetPlusBtn");
+    const targetCountDisplay = document.getElementById("targetCountDisplay");
+
+    const dailyMinusBtn = document.getElementById("dailyMinusBtn");
+    const dailyPlusBtn = document.getElementById("dailyPlusBtn");
+    const dailyLimitDisplay = document.getElementById("dailyLimitDisplay");
+
+    const coolMinusBtn = document.getElementById("coolMinusBtn");
+    const coolPlusBtn = document.getElementById("coolPlusBtn");
+    const cooldownDisplay = document.getElementById("cooldownDisplay");
+
+    const sfxVolumeSlider = document.getElementById("sfxVolumeSlider");
+    const sfxVolumeVal = document.getElementById("sfxVolumeVal");
+
+    const countTimingMode = document.getElementById("countTimingMode");
+    const countCustomOffsetRow = document.getElementById("countCustomOffsetRow");
+    const countOffsetMinusBtn = document.getElementById("countOffsetMinusBtn");
+    const countOffsetPlusBtn = document.getElementById("countOffsetPlusBtn");
+    const countOffsetDisplay = document.getElementById("countOffsetDisplay");
+
+    const countDurMinusBtn = document.getElementById("countDurMinusBtn");
+    const countDurPlusBtn = document.getElementById("countDurPlusBtn");
+    const countDurDisplay = document.getElementById("countDurDisplay");
+    const bpmMinusBtn = document.getElementById("bpmMinusBtn");
+    const bpmPlusBtn = document.getElementById("bpmPlusBtn");
+    const bpmDisplay = document.getElementById("bpmDisplay");
+    const bpmSlider = document.getElementById("bpmSlider");
+    const countSoundType = document.getElementById("countSoundType");
+    const countVolumeSlider = document.getElementById("countVolumeSlider");
+    const countVolumeVal = document.getElementById("countVolumeVal");
+    const testCountSoundBtn = document.getElementById("testCountSoundBtn");
+
+    const testEnterBtn = document.getElementById("testEnterBtn");
+    const testExitBtn = document.getElementById("testExitBtn");
+    const stopMusicBtn = document.getElementById("stopMusicBtn");
+    const resetCountBtn = document.getElementById("resetCountBtn");
+    const resetDailyBtn = document.getElementById("resetDailyBtn");
+
+    const newTitleInput = document.getElementById("newTitleInput");
+    const newUrlInput = document.getElementById("newUrlInput");
+    const addUrlBtn = document.getElementById("addUrlBtn");
+    const mainSongListContainer = document.getElementById("mainSongListContainer");
+    const settingSongListContainer = document.getElementById("settingSongListContainer");
+    const mainSongCountBadge = document.getElementById("mainSongCountBadge");
+
+    // 状態変数
+    let personModel = null;
+    let faceModelsLoaded = false;
+    let mediaStream = null;
+    let isCameraActive = false;
+    let userManualCamOff = false;
+    let isCamHidden = false;
+    let activeScreenId = "mainScreen";
+
+    // Firebase Firestore 同期状態
+    let firestoreDb = null;
+    let unsubscribeFirestore = null;
+    let isApplyingRemoteSnapshot = false;
+    let cloudPushTimer = null;
+    const DEVICE_CLIENT_ID = `dev_${Math.random().toString(36).slice(2, 10)}`;
+    let syncGroupId = localStorage.getItem("person_sound_sync_group_v1") || "default_room";
+    syncGroupIdInput.value = syncGroupId;
+
+    // 効果音ボタンリスト
+    let sfxButtons = JSON.parse(localStorage.getItem("person_sound_sfx_v1") || "null") || DEFAULT_SFX_BUTTONS.map(x => ({ ...x }));
+
+    // 歩く速さ・通過感度設定
+    let savedWalkConfig = JSON.parse(localStorage.getItem("person_sound_walk_cfg_v1") || "null") || {
+      preset: "normal",
+      moveRatio: 0.12,
+      holdMs: 2500
+    };
+
+    // 顔認証データ
+    let savedFaceConfig = JSON.parse(localStorage.getItem("person_sound_face_cfg_v1") || "null") || {
+      enabled: true,
+      threshold: 0.58
+    };
+    let registeredFaces = JSON.parse(localStorage.getItem("person_sound_faces_v1") || "[]");
+    let lastMatchedFaceName = null;
+    let lastMatchedTime = 0;
+    let isRunningFaceCheck = false;
+
+    // 運用パラメータ
+    let savedOpsConfig = JSON.parse(localStorage.getItem("person_sound_ops_cfg_v1") || "null") || {
+      targetCount: 3,
+      dailyLimit: 10,
+      cooldownSec: 3,
+      enterDirection: "left_to_right",
+      exitImmediate: true,
+      sfxMasterVolume: 0.9
+    };
+
+    let currentCount = 0;
+    let targetCount = savedOpsConfig.targetCount;
+    let dailyLimit = savedOpsConfig.dailyLimit;
+    let dailyPlayedCount = 0;
+    let lastTriggerTime = 0;
+    let cooldownSec = savedOpsConfig.cooldownSec;
+
+    let savedDirectionModes = JSON.parse(localStorage.getItem("person_sound_dir_modes_v1") || "null") || {
+      enterAction: "random",
+      exitAction: "random"
+    };
+
+    // 人物の左右移動追跡用
+    let trackStartX = null;
+    let trackLastX = null;
+    let trackLastSeenTime = 0;
+    let trackTriggeredThisPass = false;
+    let trackVerifiedNameThisPass = null;
+
+    let sfxMasterVolume = savedOpsConfig.sfxMasterVolume;
+    let activeSfxAudios = [];
+
+    // カウント音設定
+    let savedCountConfig = JSON.parse(localStorage.getItem("person_sound_count_cfg_v1") || "null") || {
+      timingMode: "end",
+      offsetSec: 0,
+      durIndex: 5,
+      bpm: 120,
+      soundMode: "beep",
+      volume: 0.7
+    };
+
+    let countDurIndex = savedCountConfig.durIndex;
+    let countSoundDurationSec = COUNT_DURATION_STEPS[countDurIndex] ?? 5;
+    let countBpm = savedCountConfig.bpm;
+    let countSoundMode = savedCountConfig.soundMode;
+    let countSoundVol = savedCountConfig.volume;
+
+    let stopTimerId = null;
+    let countStartTimerId = null;
+    let countIntervalId = null;
+    let volumeEnvelopeRafId = null;
+    let lastPlayedIndex = -1;
+    let currentPlayingIndex = -1;
+
+    // ==========================================
+    // パス正規化 & Dropboxリンク自動変換
+    // ==========================================
+    function normalizeAudioPath(rawInput) {
+      const trimmed = (rawInput || "").trim();
+      if (!trimmed) return "";
+
+      if (/^https?:\/\//i.test(trimmed)) {
+        try {
+          const urlObj = new URL(trimmed);
+          if (urlObj.hostname.includes("dropbox.com")) {
+            urlObj.searchParams.delete("dl");
+            urlObj.searchParams.set("raw", "1");
+            return urlObj.toString();
+          }
+        } catch (e) {}
+        return trimmed;
+      }
+
+      if (/^(\.\/|\.\.\/|\/)/i.test(trimmed)) {
+        return trimmed;
+      }
+      return `./${trimmed}`;
+    }
+
+    function resolveSafeAudioUrl(rawPath) {
+      const normalized = normalizeAudioPath(rawPath);
+      if (/^https?:\/\//i.test(normalized)) {
+        return normalized;
+      }
+      const fullUrl = new URL(normalized, window.location.href).href;
+      return encodeURI(decodeURI(fullUrl));
+    }
+
+    function isGitHubRelativePath(url) {
+      return !/^https?:\/\//i.test(url);
+    }
+
+    let rawSaved = JSON.parse(localStorage.getItem("person_sound_songs_v6") || "null");
+    let songList = Array.isArray(rawSaved)
+      ? rawSaved.map(s => ({
+          title: s.title || "無題の曲",
+          url: normalizeAudioPath(s.url || ""),
+          baseVolume: typeof s.baseVolume === "number" ? s.baseVolume : (typeof s.volume === "number" ? s.volume : 40),
+          peakVolume: typeof s.peakVolume === "number" ? s.peakVolume : 100,
+          highlightStart: typeof s.highlightStart === "number" ? s.highlightStart : 0,
+          highlightEnd: typeof s.highlightEnd === "number" ? s.highlightEnd : 0,
+          fadeIn: typeof s.fadeIn === "number" ? s.fadeIn : 1,
+          fadeOut: typeof s.fadeOut === "number" ? s.fadeOut : 2,
+          duration: typeof s.duration === "number" ? s.duration : 15
+        }))
+      : [...DEFAULT_SONGS];
+
+    const audioPlayer = new Audio();
+    audioPlayer.preload = "auto";
+
+    // ==========================================
+    // ★ Firebase Firestore クラウド自動同期エンジン
+    // ==========================================
+    function setSyncBadge(text, colorHex) {
+      cloudSyncStatusText.textContent = text;
+      cloudSyncStatusText.style.color = colorHex;
+      settingsSyncDetail.textContent = text;
+      settingsSyncDetail.style.color = colorHex;
+    }
+
+    function saveAllToLocalStorage() {
+      localStorage.setItem("person_sound_songs_v6", JSON.stringify(songList));
+      localStorage.setItem("person_sound_face_cfg_v1", JSON.stringify(savedFaceConfig));
+      localStorage.setItem("person_sound_faces_v1", JSON.stringify(registeredFaces));
+      localStorage.setItem("person_sound_walk_cfg_v1", JSON.stringify(savedWalkConfig));
+      localStorage.setItem("person_sound_dir_modes_v1", JSON.stringify(savedDirectionModes));
+      localStorage.setItem("person_sound_count_cfg_v1", JSON.stringify(savedCountConfig));
+      localStorage.setItem("person_sound_sfx_v1", JSON.stringify(sfxButtons));
+      localStorage.setItem("person_sound_ops_cfg_v1", JSON.stringify(savedOpsConfig));
+    }
+
+    // 変更があったときにクラウド（Firestore）へ自動送信（連続操作をまとめて500ms後に送信）
+    function scheduleCloudPush() {
+      saveAllToLocalStorage();
+      if (!firestoreDb || isApplyingRemoteSnapshot) return;
+
+      if (cloudPushTimer) clearTimeout(cloudPushTimer);
+      setSyncBadge("☁️ クラウドへ同期中...", "#f59e0b");
+
+      cloudPushTimer = setTimeout(async () => {
+        try {
+          const payload = {
+            updatedAt: Date.now(),
+            updatedBy: DEVICE_CLIENT_ID,
+            songList,
+            savedFaceConfig,
+            registeredFaces,
+            savedWalkConfig,
+            savedDirectionModes,
+            savedCountConfig,
+            sfxButtons,
+            savedOpsConfig
+          };
+          await firestoreDb.collection("entry_exit_shared_rooms").doc(syncGroupId).set(payload);
+          const now = new Date();
+          const timeStr = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}:${String(now.getSeconds()).padStart(2, "0")}`;
+          setSyncBadge(`✅ 全端末同期済み (${syncGroupId} / ${timeStr})`, "#10b981");
+        } catch (err) {
+          setSyncBadge(`❌ クラウド保存エラー: Firestoreルールを確認してください`, "#ef4444");
+        }
+      }, 500);
+    }
+
+    // 他端末から更新が届いたときに画面へ即時反映
+    function applyRemoteDataToState(data) {
+      if (!data) return;
+      isApplyingRemoteSnapshot = true;
+      try {
+        if (Array.isArray(data.songList)) {
+          songList = data.songList.map(s => ({
+            title: s.title || "無題の曲",
+            url: normalizeAudioPath(s.url || ""),
+            baseVolume: typeof s.baseVolume === "number" ? s.baseVolume : 40,
+            peakVolume: typeof s.peakVolume === "number" ? s.peakVolume : 100,
+            highlightStart: typeof s.highlightStart === "number" ? s.highlightStart : 0,
+            highlightEnd: typeof s.highlightEnd === "number" ? s.highlightEnd : 0,
+            fadeIn: typeof s.fadeIn === "number" ? s.fadeIn : 1,
+            fadeOut: typeof s.fadeOut === "number" ? s.fadeOut : 2,
+            duration: typeof s.duration === "number" ? s.duration : 15
+          }));
+        }
+        if (data.savedFaceConfig) {
+          savedFaceConfig = { ...savedFaceConfig, ...data.savedFaceConfig };
+        }
+        if (Array.isArray(data.registeredFaces)) {
+          registeredFaces = data.registeredFaces;
+        }
+        if (data.savedWalkConfig) {
+          savedWalkConfig = { ...savedWalkConfig, ...data.savedWalkConfig };
+        }
+        if (data.savedDirectionModes) {
+          savedDirectionModes = { ...savedDirectionModes, ...data.savedDirectionModes };
+        }
+        if (data.savedCountConfig) {
+          savedCountConfig = { ...savedCountConfig, ...data.savedCountConfig };
+          countDurIndex = savedCountConfig.durIndex ?? 5;
+          countSoundDurationSec = COUNT_DURATION_STEPS[countDurIndex] ?? 5;
+          countBpm = savedCountConfig.bpm ?? 120;
+          countSoundMode = savedCountConfig.soundMode || "beep";
+          countSoundVol = typeof savedCountConfig.volume === "number" ? savedCountConfig.volume : 0.7;
+        }
+        if (Array.isArray(data.sfxButtons)) {
+          sfxButtons = data.sfxButtons;
+        }
+        if (data.savedOpsConfig) {
+          savedOpsConfig = { ...savedOpsConfig, ...data.savedOpsConfig };
+          targetCount = savedOpsConfig.targetCount ?? 3;
+          dailyLimit = savedOpsConfig.dailyLimit ?? 10;
+          cooldownSec = savedOpsConfig.cooldownSec ?? 3;
+          sfxMasterVolume = savedOpsConfig.sfxMasterVolume ?? 0.9;
+        }
+
+        saveAllToLocalStorage();
+        syncAllUIFromState();
+      } finally {
+        isApplyingRemoteSnapshot = false;
+      }
+    }
+
+    function syncAllUIFromState() {
+      targetCountDisplay.textContent = `${targetCount}人`;
+      targetCountHud.textContent = targetCount;
+      dailyLimitDisplay.textContent = dailyLimit === 0 ? "無制限" : `${dailyLimit}回`;
+      dailyLimitHud.textContent = dailyLimit === 0 ? "∞" : dailyLimit;
+      cooldownDisplay.textContent = `${cooldownSec}秒`;
+      enterDirectionSelect.value = savedOpsConfig.enterDirection || "left_to_right";
+      exitImmediateToggle.checked = savedOpsConfig.exitImmediate !== false;
+
+      const sfxPct = Math.round(sfxMasterVolume * 100);
+      sfxVolumeSlider.value = String(sfxPct);
+      sfxVolumeVal.textContent = `${sfxPct}%`;
+
+      updateCamDirectionTags();
+      updateWalkSpeedUI();
+      syncCountConfigUI();
+      renderSfxPads();
+      renderAllSongLists();
+      renderRegisteredFaces();
+      if (currentPlayingIndex === -1) {
+        restoreIdleStatus();
+      }
+    }
+
+    function connectFirestoreSync(groupId) {
+      if (!FIREBASE_CONFIG.apiKey || !FIREBASE_CONFIG.projectId) {
+        setSyncBadge("📱 ローカル保存モード（Firebase設定未入力）", "#94a3b8");
+        return;
+      }
+
+      try {
+        if (!firebase.apps.length) {
+          firebase.initializeApp(FIREBASE_CONFIG);
+        }
+        firestoreDb = firebase.firestore();
+
+        if (unsubscribeFirestore) {
+          unsubscribeFirestore();
+          unsubscribeFirestore = null;
+        }
+
+        setSyncBadge(`☁️ クラウド接続中 (${groupId})...`, "#38bdf8");
+        const docRef = firestoreDb.collection("entry_exit_shared_rooms").doc(groupId);
+
+        unsubscribeFirestore = docRef.onSnapshot((snap) => {
+          if (snap.exists) {
+            const data = snap.data();
+            // 他端末が更新したデータ、または初回受信時は画面へ反映
+            if (data.updatedBy !== DEVICE_CLIENT_ID || !cloudPushTimer) {
+              applyRemoteDataToState(data);
+            }
+            setSyncBadge(`✅ 全端末リアルタイム同期中 (${groupId})`, "#10b981");
+          } else {
+            // クラウドにまだデータがない場合は現在の端末データを初回アップロード
+            scheduleCloudPush();
+          }
+        }, (err) => {
+          setSyncBadge(`⚠️ 同期エラー: Firestoreのルール設定を確認してください`, "#ef4444");
+        });
+      } catch (err) {
+        setSyncBadge("❌ Firebase初期化エラー: 設定値を確認してください", "#ef4444");
+      }
+    }
+
+    applySyncGroupBtn.addEventListener("click", () => {
+      const nextGroup = syncGroupIdInput.value.trim().replace(/[^a-zA-Z0-9_-]/g, "") || "default_room";
+      syncGroupIdInput.value = nextGroup;
+      syncGroupId = nextGroup;
+      localStorage.setItem("person_sound_sync_group_v1", syncGroupId);
+      connectFirestoreSync(syncGroupId);
+    });
+
+    manualCloudPullBtn.addEventListener("click", async () => {
+      if (!firestoreDb) {
+        connectFirestoreSync(syncGroupId);
+        return;
+      }
+      setSyncBadge("🔄 最新データを取得中...", "#38bdf8");
+      try {
+        const snap = await firestoreDb.collection("entry_exit_shared_rooms").doc(syncGroupId).get();
+        if (snap.exists) {
+          applyRemoteDataToState(snap.data());
+          setSyncBadge(`✅ 最新データを反映しました (${syncGroupId})`, "#10b981");
+        } else {
+          scheduleCloudPush();
+        }
+      } catch (e) {
+        setSyncBadge("❌ 再同期に失敗しました", "#ef4444");
+      }
+    });
+
+    // ==========================================
+    // カウント音タイミング・設定の保存とUI同期
+    // ==========================================
+    function saveCountConfig() {
+      savedCountConfig.timingMode = countTimingMode.value;
+      savedCountConfig.durIndex = countDurIndex;
+      savedCountConfig.bpm = countBpm;
+      savedCountConfig.soundMode = countSoundMode;
+      savedCountConfig.volume = countSoundVol;
+      scheduleCloudPush();
+    }
+
+    function syncCountConfigUI() {
+      countTimingMode.value = savedCountConfig.timingMode || "end";
+      countCustomOffsetRow.style.display = countTimingMode.value === "custom_sec" ? "flex" : "none";
+      countOffsetDisplay.textContent = `${savedCountConfig.offsetSec || 0}秒後`;
+      countDurDisplay.textContent = countSoundDurationSec === 0 ? "OFF（0秒）" : `${countSoundDurationSec}秒間`;
+      bpmDisplay.textContent = `${countBpm} BPM`;
+      bpmSlider.value = String(countBpm);
+      countSoundType.value = countSoundMode;
+      const volPct = Math.round(countSoundVol * 100);
+      countVolumeSlider.value = String(volPct);
+      countVolumeVal.textContent = `${volPct}%`;
+    }
+
+    countTimingMode.addEventListener("change", () => {
+      savedCountConfig.timingMode = countTimingMode.value;
+      syncCountConfigUI();
+      saveCountConfig();
+    });
+
+    countOffsetMinusBtn.addEventListener("click", () => {
+      savedCountConfig.offsetSec = Math.max(0, (savedCountConfig.offsetSec || 0) - 1);
+      syncCountConfigUI();
+      saveCountConfig();
+    });
+
+    countOffsetPlusBtn.addEventListener("click", () => {
+      savedCountConfig.offsetSec = Math.min(300, (savedCountConfig.offsetSec || 0) + 1);
+      syncCountConfigUI();
+      saveCountConfig();
+    });
+
+    // ==========================================
+    // 歩く速さ・通過感度設定のUI＆保存
+    // ==========================================
+    function saveWalkConfig() {
+      updateWalkSpeedUI();
+      scheduleCloudPush();
+    }
+
+    function updateWalkSpeedUI() {
+      const pct = Math.round(savedWalkConfig.moveRatio * 100);
+      moveThresholdSlider.value = String(pct);
+      moveThresholdVal.textContent = `${pct}%`;
+
+      const holdTenths = Math.round(savedWalkConfig.holdMs / 100);
+      trackHoldSlider.value = String(holdTenths);
+      trackHoldVal.textContent = `${(holdTenths / 10).toFixed(1)}秒`;
+
+      speedPresetBtns.forEach(btn => {
+        btn.classList.toggle("active", btn.dataset.speed === savedWalkConfig.preset);
+      });
+    }
+
+    speedPresetBtns.forEach(btn => {
+      btn.addEventListener("click", () => {
+        const mode = btn.dataset.speed;
+        savedWalkConfig.preset = mode;
+        if (mode === "fast") {
+          savedWalkConfig.moveRatio = 0.08;
+          savedWalkConfig.holdMs = 1500;
+        } else if (mode === "normal") {
+          savedWalkConfig.moveRatio = 0.12;
+          savedWalkConfig.holdMs = 2500;
+        } else if (mode === "slow") {
+          savedWalkConfig.moveRatio = 0.16;
+          savedWalkConfig.holdMs = 4000;
+        }
+        saveWalkConfig();
+      });
+    });
+
+    moveThresholdSlider.addEventListener("input", () => {
+      savedWalkConfig.preset = "custom";
+      savedWalkConfig.moveRatio = parseInt(moveThresholdSlider.value, 10) / 100;
+      saveWalkConfig();
+    });
+
+    trackHoldSlider.addEventListener("input", () => {
+      savedWalkConfig.preset = "custom";
+      savedWalkConfig.holdMs = parseInt(trackHoldSlider.value, 10) * 100;
+      saveWalkConfig();
+    });
+
+    // ==========================================
+    // 顔認証データの保存・UI更新・複数パターン照合ロジック
+    // ==========================================
+    function saveFaceSettings() {
+      updateFaceAuthBannerUI();
+      scheduleCloudPush();
+    }
+
+    function updateFaceAuthBannerUI() {
+      faceAuthEnabledToggle.checked = savedFaceConfig.enabled;
+      faceThresholdSlider.value = String(Math.round(savedFaceConfig.threshold * 100));
+      faceThresholdVal.textContent = savedFaceConfig.threshold.toFixed(2);
+      registeredFaceCountBadge.textContent = `${registeredFaces.length}件`;
+
+      if (savedFaceConfig.enabled) {
+        mainAuthStatePill.textContent = `認証ON（${registeredFaces.length}件登録）`;
+        mainAuthStatePill.className = "auth-pill on";
+      } else {
+        mainAuthStatePill.textContent = "認証OFF（全員反応）";
+        mainAuthStatePill.className = "auth-pill off";
+      }
+    }
+
+    function euclideanDistance(desc1, desc2) {
+      let sum = 0;
+      const len = Math.min(desc1.length, desc2.length);
+      for (let i = 0; i < len; i++) {
+        const diff = desc1[i] - desc2[i];
+        sum += diff * diff;
+      }
+      return Math.sqrt(sum);
+    }
+
+    function findBestMatchingFace(queryDescriptor) {
+      if (registeredFaces.length === 0) return null;
+      let bestMatch = null;
+      let bestDist = Infinity;
+
+      for (const person of registeredFaces) {
+        const descList = Array.isArray(person.descriptors)
+          ? person.descriptors
+          : (Array.isArray(person.descriptor) ? [person.descriptor] : []);
+
+        for (const desc of descList) {
+          const dist = euclideanDistance(queryDescriptor, desc);
+          if (dist < bestDist) {
+            bestDist = dist;
+            bestMatch = person;
+          }
+        }
+      }
+
+      if (!bestMatch) return null;
+      return {
+        name: bestMatch.name,
+        id: bestMatch.id,
+        distance: bestDist,
+        isMatch: bestDist <= savedFaceConfig.threshold
+      };
+    }
+
+    function renderRegisteredFaces() {
+      registeredFaceListContainer.innerHTML = "";
+      updateFaceAuthBannerUI();
+
+      if (registeredFaces.length === 0) {
+        registeredFaceListContainer.innerHTML = `<div style="color:#64748b; font-size:0.83rem; text-align:center; padding:12px;">まだ顔が登録されていません。上のカメラ枠に顔を映して登録してください。</div>`;
+        return;
+      }
+
+      registeredFaces.forEach((face, idx) => {
+        const patternCount = Array.isArray(face.descriptors) ? face.descriptors.length : 1;
+        const card = document.createElement("div");
+        card.className = "registered-face-card" + (lastMatchedFaceName === face.name ? " matched-now" : "");
+
+        const leftWrap = document.createElement("div");
+        leftWrap.style.display = "flex";
+        leftWrap.style.alignItems = "center";
+        leftWrap.style.gap = "10px";
+
+        const img = document.createElement("img");
+        img.className = "face-thumb";
+        img.src = face.thumbnail || "";
+        img.alt = face.name;
+
+        const infoDiv = document.createElement("div");
+        infoDiv.innerHTML = `
+          <div style="font-weight: bold; font-size: 0.94rem; color: #f8fafc;">${escapeHtml(face.name)} <span style="font-size:0.72rem; color:#38bdf8;">(${patternCount}パターン学習済)</span></div>
+          <div style="font-size: 0.72rem; color: #94a3b8;">更新: ${escapeHtml(face.createdAt || "登録済")}</div>
+        `;
+
+        leftWrap.appendChild(img);
+        leftWrap.appendChild(infoDiv);
+
+        const delBtn = document.createElement("button");
+        delBtn.type = "button";
+        delBtn.className = "mini-btn mini-del";
+        delBtn.textContent = "削除";
+        delBtn.addEventListener("click", () => {
+          registeredFaces.splice(idx, 1);
+          saveFaceSettings();
+          renderRegisteredFaces();
+        });
+
+        card.appendChild(leftWrap);
+        card.appendChild(delBtn);
+        registeredFaceListContainer.appendChild(card);
+      });
+    }
+
+    faceAuthEnabledToggle.addEventListener("change", () => {
+      savedFaceConfig.enabled = faceAuthEnabledToggle.checked;
+      saveFaceSettings();
+    });
+
+    faceThresholdSlider.addEventListener("input", () => {
+      savedFaceConfig.threshold = parseInt(faceThresholdSlider.value, 10) / 100;
+      saveFaceSettings();
+    });
+
+    registerFaceBtn.addEventListener("click", async () => {
+      if (!isCameraActive || webcamVideo.readyState < 2) {
+        faceRegFeedback.textContent = "⚠️ カメラが起動していません。先にカメラをONにしてください。";
+        faceRegFeedback.style.color = "#ef4444";
+        return;
+      }
+      if (!faceModelsLoaded) {
+        faceRegFeedback.textContent = "⏳ 顔認証AIモデルを読み込み中です。数秒お待ちください...";
+        faceRegFeedback.style.color = "#f59e0b";
+        return;
+      }
+
+      registerFaceBtn.disabled = true;
+      faceRegFeedback.textContent = "🔍 顔を解析して特徴を抽出しています...";
+      faceRegFeedback.style.color = "#38bdf8";
+
+      try {
+        const detection = await faceapi
+          .detectSingleFace(webcamVideo, new faceapi.TinyFaceDetectorOptions({ inputSize: 320, scoreThreshold: 0.35 }))
+          .withFaceLandmarks()
+          .withFaceDescriptor();
+
+        if (!detection) {
+          faceRegFeedback.textContent = "❌ 顔を検出できませんでした。明るい場所でカメラの方に顔を向けて再度押してください。";
+          faceRegFeedback.style.color = "#ef4444";
+          registerFaceBtn.disabled = false;
+          return;
+        }
+
+        const rawName = newFaceNameInput.value.trim();
+        const personName = rawName || (registeredFaces[0] ? registeredFaces[0].name : "認証メンバー 1");
+
+        const box = detection.detection.box;
+        const thumbCanvas = document.createElement("canvas");
+        thumbCanvas.width = 72;
+        thumbCanvas.height = 72;
+        const tCtx = thumbCanvas.getContext("2d");
+        const pad = box.width * 0.2;
+        tCtx.drawImage(
+          webcamVideo,
+          Math.max(0, box.x - pad),
+          Math.max(0, box.y - pad),
+          box.width + pad * 2,
+          box.height + pad * 2,
+          0, 0, 72, 72
+        );
+        const thumbnailDataUrl = thumbCanvas.toDataURL("image/jpeg", 0.65);
+
+        const now = new Date();
+        const createdStr = `${now.getMonth() + 1}/${now.getDate()} ${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
+        const newDescriptor = Array.from(detection.descriptor);
+
+        const existingIdx = registeredFaces.findIndex(f => f.name === personName);
+        if (existingIdx !== -1) {
+          const target = registeredFaces[existingIdx];
+          if (!Array.isArray(target.descriptors)) {
+            target.descriptors = target.descriptor ? [target.descriptor] : [];
+          }
+          target.descriptors.push(newDescriptor);
+          if (target.descriptors.length > 6) {
+            target.descriptors.shift();
+          }
+          target.thumbnail = thumbnailDataUrl;
+          target.createdAt = createdStr;
+          faceRegFeedback.textContent = `✅ 「${personName}」さんの顔を追加学習し、クラウドへ同期しました！`;
+        } else {
+          registeredFaces.push({
+            id: `face_${Date.now()}`,
+            name: personName,
+            descriptor: newDescriptor,
+            descriptors: [newDescriptor],
+            thumbnail: thumbnailDataUrl,
+            createdAt: createdStr
+          });
+          faceRegFeedback.textContent = `✅ 「${personName}」さんの顔を登録し、クラウドへ同期しました！`;
+        }
+
+        newFaceNameInput.value = "";
+        saveFaceSettings();
+        renderRegisteredFaces();
+        faceRegFeedback.style.color = "#10b981";
+      } catch (err) {
+        faceRegFeedback.textContent = "❌ 顔登録中にエラーが発生しました。もう一度お試しください。";
+        faceRegFeedback.style.color = "#ef4444";
+      } finally {
+        registerFaceBtn.disabled = false;
+      }
+    });
+
+    // ==========================================
+    // 入室・退出の曲選択プルダウン描画
+    // ==========================================
+    function populateDirectionActionSelects() {
+      const buildOptionsHtml = (selectedVal) => {
+        let html = `<option value="random"${selectedVal === "random" ? " selected" : ""}>🎵 ランダム曲リストを再生</option>`;
+        songList.forEach((song, idx) => {
+          const val = `song_${idx}`;
+          const label = `🎵 ${idx + 1}. ${escapeHtml(song.title)}`;
+          html += `<option value="${val}"${selectedVal === val ? " selected" : ""}>${label}</option>`;
+        });
+        html += `<option value="none"${selectedVal === "none" ? " selected" : ""}>🔇 鳴らさない（無音）</option>`;
+        return html;
+      };
+
+      enterSoundSelect.innerHTML = buildOptionsHtml(savedDirectionModes.enterAction);
+      exitSoundSelect.innerHTML = buildOptionsHtml(savedDirectionModes.exitAction);
+    }
+
+    enterSoundSelect.addEventListener("change", () => {
+      savedDirectionModes.enterAction = enterSoundSelect.value;
+      scheduleCloudPush();
+    });
+
+    exitSoundSelect.addEventListener("change", () => {
+      savedDirectionModes.exitAction = exitSoundSelect.value;
+      scheduleCloudPush();
+    });
+
+    exitImmediateToggle.addEventListener("change", () => {
+      savedOpsConfig.exitImmediate = exitImmediateToggle.checked;
+      scheduleCloudPush();
+    });
+
+    function updateCamDirectionTags() {
+      if (enterDirectionSelect.value === "left_to_right") {
+        camLeftTag.textContent = "入 ➔";
+        camRightTag.textContent = "⬅ 出";
+      } else {
+        camLeftTag.textContent = "出 ➔";
+        camRightTag.textContent = "⬅ 入";
+      }
+    }
+    enterDirectionSelect.addEventListener("change", () => {
+      savedOpsConfig.enterDirection = enterDirectionSelect.value;
+      updateCamDirectionTags();
+      scheduleCloudPush();
+    });
+
+    // ==========================================
+    // ワンタップ効果音パッド描画＆自動フォールバック再生
+    // ==========================================
+    function saveSfxConfig() {
+      scheduleCloudPush();
+    }
+
+    function renderSfxPads() {
+      sfxPadGrid.innerHTML = "";
+      sfxButtons.forEach((sfx) => {
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "sfx-pad-btn";
+        const fileName = sfx.file.replace("./", "");
+        btn.innerHTML = `
+          <span class="sfx-emoji">${sfx.emoji}</span>
+          <span class="sfx-name">${escapeHtml(sfx.label)}</span>
+          <span class="sfx-file">${escapeHtml(fileName)}</span>
+        `;
+        btn.addEventListener("click", () => {
+          triggerSfxSound(sfx, btn);
+        });
+        sfxPadGrid.appendChild(btn);
+      });
+
+      sfxConfigList.innerHTML = "";
+      sfxButtons.forEach((sfx, idx) => {
+        const row = document.createElement("div");
+        row.style.display = "flex";
+        row.style.alignItems = "center";
+        row.style.gap = "6px";
+
+        const lbl = document.createElement("span");
+        lbl.style.fontSize = "0.82rem";
+        lbl.style.minWidth = "64px";
+        lbl.textContent = `${sfx.emoji} ${sfx.label}:`;
+
+        const input = document.createElement("input");
+        input.type = "text";
+        input.className = "text-input";
+        input.style.padding = "7px 9px";
+        input.style.fontSize = "0.8rem";
+        input.value = sfx.file;
+        input.addEventListener("change", () => {
+          sfxButtons[idx].file = normalizeAudioPath(input.value);
+          saveSfxConfig();
+          renderSfxPads();
+        });
+
+        const testBtn = document.createElement("button");
+        testBtn.type = "button";
+        testBtn.className = "mini-btn mini-play";
+        testBtn.textContent = "▶";
+        testBtn.addEventListener("click", () => triggerSfxSound(sfxButtons[idx]));
+
+        row.appendChild(lbl);
+        row.appendChild(input);
+        row.appendChild(testBtn);
+        sfxConfigList.appendChild(row);
+      });
+    }
+
+    function buildSfxCandidateUrls(rawFile) {
+      const normalized = normalizeAudioPath(rawFile);
+      const candidates = [resolveSafeAudioUrl(normalized)];
+
+      if (isGitHubRelativePath(normalized)) {
+        if (normalized.endsWith(".mp3")) {
+          candidates.push(resolveSafeAudioUrl(normalized.replace(/\.mp3$/, ".MP3")));
+          candidates.push(resolveSafeAudioUrl(normalized.replace(/\.mp3$/, ".wav")));
+        } else if (normalized.endsWith(".MP3")) {
+          candidates.push(resolveSafeAudioUrl(normalized.replace(/\.MP3$/, ".mp3")));
+        }
+      }
+      return [...new Set(candidates)];
+    }
+
+    function triggerSfxSound(sfx, btnEl = null, prefixLabel = "") {
+      if (btnEl) {
+        btnEl.classList.add("active-sfx");
+        setTimeout(() => btnEl.classList.remove("active-sfx"), 260);
+      }
+
+      const candidateUrls = buildSfxCandidateUrls(sfx.file);
+      let attemptIdx = 0;
+
+      const tryPlayCandidate = () => {
+        if (attemptIdx >= candidateUrls.length) {
+          systemStatus.textContent = `❌ 「${sfx.label}」再生失敗: GitHub上に「${sfx.file.replace("./", "")}」が存在するか確認してください`;
+          systemStatus.style.color = "#ef4444";
+          return;
+        }
+
+        const targetUrl = candidateUrls[attemptIdx];
+        attemptIdx++;
+
+        const sfxAudio = new Audio(targetUrl);
+        sfxAudio.volume = sfxMasterVolume;
+
+        sfxAudio.play().then(() => {
+          activeSfxAudios.push(sfxAudio);
+          if (currentPlayingIndex === -1) {
+            systemStatus.textContent = `${prefixLabel}${sfx.emoji} 再生: ${sfx.label}`;
+            systemStatus.style.color = "#fbbf24";
+          }
+          sfxAudio.addEventListener("ended", () => {
+            activeSfxAudios = activeSfxAudios.filter(a => a !== sfxAudio);
+            if (currentPlayingIndex === -1 && activeSfxAudios.length === 0) {
+              restoreIdleStatus();
+            }
+          });
+        }).catch(() => {
+          tryPlayCandidate();
+        });
+      };
+
+      tryPlayCandidate();
+    }
+
+    function stopAllSfx() {
+      activeSfxAudios.forEach(a => {
+        a.pause();
+        a.currentTime = 0;
+      });
+      activeSfxAudios = [];
+    }
+
+    sfxVolumeSlider.addEventListener("input", (e) => {
+      const val = parseInt(e.target.value, 10);
+      sfxMasterVolume = val / 100;
+      savedOpsConfig.sfxMasterVolume = sfxMasterVolume;
+      sfxVolumeVal.textContent = `${val}%`;
+      activeSfxAudios.forEach(a => { a.volume = sfxMasterVolume; });
+      scheduleCloudPush();
+    });
+
+    // ==========================================
+    // 入室・退出それぞれの曲アクション実行
+    // ==========================================
+    function executeActionByCode(actionCode, isTest = false, prefixLabel = "") {
+      if (actionCode === "none") {
+        systemStatus.textContent = `${prefixLabel}🔇 無音設定のため再生なし`;
+        systemStatus.style.color = "#94a3b8";
+        return;
+      }
+      if (actionCode === "random") {
+        playRandomSong(isTest, prefixLabel);
+        return;
+      }
+      if (actionCode.startsWith("song_")) {
+        const songIdx = parseInt(actionCode.replace("song_", ""), 10);
+        if (songList[songIdx]) {
+          playSpecificSong(songIdx, isTest, prefixLabel);
+        } else {
+          playRandomSong(isTest, prefixLabel);
+        }
+      }
+    }
+
+    function handlePersonDirectionEvent(directionType, isTest = false, authPersonName = "") {
+      const nameTag = authPersonName ? `[${authPersonName}] ` : "";
+
+      if (directionType === "enter") {
+        if (isTest) {
+          executeActionByCode(enterSoundSelect.value, true, "【入室テスト】");
+          return;
+        }
+        currentCount++;
+        currentCountEl.textContent = currentCount;
+        countStatBox.classList.add("pulse");
+        setTimeout(() => countStatBox.classList.remove("pulse"), 350);
+
+        if (currentCount >= targetCount) {
+          executeActionByCode(enterSoundSelect.value, false, `➡ ${nameTag}入室: `);
+          currentCount = 0;
+          currentCountEl.textContent = "0";
+        } else {
+          systemStatus.textContent = `➡ ${nameTag}入室カウント（${currentCount}/${targetCount}人・あと ${targetCount - currentCount} 人）`;
+          systemStatus.style.color = "#10b981";
+        }
+      } else if (directionType === "exit") {
+        if (isTest || exitImmediateToggle.checked) {
+          executeActionByCode(exitSoundSelect.value, isTest, isTest ? "【退出テスト】" : `⬅ ${nameTag}退出: `);
+        } else {
+          currentCount++;
+          currentCountEl.textContent = currentCount;
+          if (currentCount >= targetCount) {
+            executeActionByCode(exitSoundSelect.value, false, `⬅ ${nameTag}退出: `);
+            currentCount = 0;
+            currentCountEl.textContent = "0";
+          } else {
+            systemStatus.textContent = `⬅ ${nameTag}退出カウント（あと ${targetCount - currentCount} 人）`;
+            systemStatus.style.color = "#f59e0b";
+          }
+        }
+      }
+    }
+
+    testEnterBtn.addEventListener("click", () => handlePersonDirectionEvent("enter", true));
+    testExitBtn.addEventListener("click", () => handlePersonDirectionEvent("exit", true));
+
+    // ==========================================
+    // カメラハードウェアの完全起動 / 完全停止制御
+    // ==========================================
+    function updateCameraButtonsUI() {
+      if (isCameraActive) {
+        toggleCamPowerBtn.textContent = "📷 カメラ停止（完全OFF）";
+        toggleCamPowerBtn.classList.remove("off-state");
+        cameraPipWrapper.classList.remove("cam-stopped");
+        settingsCamToggleBtn.textContent = "📷 現在ON（押してOFF）";
+        settingsCamToggleBtn.style.background = "#10b981";
+        settingsCamToggleBtn.style.color = "#0f172a";
+      } else {
+        toggleCamPowerBtn.textContent = "📷 カメラ起動（検知開始）";
+        toggleCamPowerBtn.classList.add("off-state");
+        cameraPipWrapper.classList.add("cam-stopped");
+        cameraPipWrapper.classList.remove("person-active", "person-unverified");
+        settingsCamToggleBtn.textContent = "📷 現在OFF（押してON）";
+        settingsCamToggleBtn.style.background = "#334155";
+        settingsCamToggleBtn.style.color = "#f8fafc";
+      }
+    }
+
+    async function loadAllAiModels() {
+      if (!personModel) {
+        personModel = await cocoSsd.load({ base: "lite_mobilenet_v2" });
+      }
+      if (!faceModelsLoaded && typeof faceapi !== "undefined") {
+        await Promise.all([
+          faceapi.nets.tinyFaceDetector.loadFromUri(FACE_MODEL_URL),
+          faceapi.nets.faceLandmark68Net.loadFromUri(FACE_MODEL_URL),
+          faceapi.nets.faceRecognitionNet.loadFromUri(FACE_MODEL_URL)
+        ]);
+        faceModelsLoaded = true;
+      }
+    }
+
+    async function startCameraHardware() {
+      if (isCameraActive) return;
+      try {
+        systemStatus.textContent = "📷 カメラと顔認証AIを起動しています...";
+        systemStatus.style.color = "#38bdf8";
+
+        mediaStream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: "environment", width: { ideal: 640 }, height: { ideal: 480 } },
+          audio: false
+        });
+        webcamVideo.srcObject = mediaStream;
+        await webcamVideo.play();
+
+        await loadAllAiModels();
+
+        isCameraActive = true;
+        trackStartX = null;
+        trackLastX = null;
+        trackTriggeredThisPass = false;
+        trackVerifiedNameThisPass = null;
+        updateCameraButtonsUI();
+        if (currentPlayingIndex === -1) {
+          restoreIdleStatus();
+        }
+        detectLoop();
+      } catch (err) {
+        isCameraActive = false;
+        updateCameraButtonsUI();
+        systemStatus.textContent = "❌ カメラまたはAIモデルの起動に失敗しました";
+        systemStatus.style.color = "#ef4444";
+      }
+    }
+
+    function stopCameraHardware(reasonText = "📷 カメラを停止中（省電力・プライバシー保護）") {
+      isCameraActive = false;
+      if (mediaStream) {
+        mediaStream.getTracks().forEach(track => track.stop());
+        mediaStream = null;
+      }
+      webcamVideo.srcObject = null;
+      const ctx = overlayCanvas.getContext("2d");
+      ctx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
+
+      updateCameraButtonsUI();
+      if (currentPlayingIndex === -1) {
+        systemStatus.textContent = reasonText;
+        systemStatus.style.color = "#94a3b8";
+      }
+    }
+
+    async function toggleManualCamera() {
+      if (isCameraActive) {
+        userManualCamOff = true;
+        stopCameraHardware("📷 カメラを手動停止しました");
+      } else {
+        userManualCamOff = false;
+        await startCameraHardware();
+      }
+    }
+
+    toggleCamPowerBtn.addEventListener("click", toggleManualCamera);
+    settingsCamToggleBtn.addEventListener("click", toggleManualCamera);
+
+    autoOffInSettingsToggle.addEventListener("change", async () => {
+      if (activeScreenId === "settingsScreen") {
+        if (autoOffInSettingsToggle.checked) {
+          stopCameraHardware("⚙️ 設定中のためカメラを自動停止しています");
+        } else if (!userManualCamOff) {
+          await startCameraHardware();
+        }
+      }
+    });
+
+    // ==========================================
+    // カウント音用 Web Audio API（タイミング指定対応）
+    // ==========================================
+    let audioCtx = null;
+    function ensureAudioContext() {
+      if (!audioCtx) {
+        const Ctx = window.AudioContext || window.webkitAudioContext;
+        if (Ctx) audioCtx = new Ctx();
+      }
+      if (audioCtx && audioCtx.state === "suspended") {
+        audioCtx.resume().catch(() => {});
+      }
+    }
+
+    function playSingleCountBeep(isFinal = false) {
+      if (countSoundDurationSec <= 0 || countSoundVol <= 0) return;
+      ensureAudioContext();
+      if (!audioCtx) return;
+
+      const now = audioCtx.currentTime;
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+
+      const peakGain = countSoundVol * 0.55;
+      const beatSec = 60 / countBpm;
+      const maxDur = Math.min(0.35, beatSec * 0.75);
+      const dur = isFinal ? Math.max(0.22, maxDur) : Math.min(0.14, beatSec * 0.55);
+
+      if (countSoundMode === "beep") {
+        osc.type = "sine";
+        osc.frequency.setValueAtTime(isFinal ? 1318.5 : 880, now);
+        gain.gain.setValueAtTime(peakGain, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + dur);
+        osc.start(now);
+        osc.stop(now + dur + 0.02);
+      } else if (countSoundMode === "chime") {
+        osc.type = "triangle";
+        osc.frequency.setValueAtTime(isFinal ? 1046.5 : 784.0, now);
+        gain.gain.setValueAtTime(peakGain, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + (isFinal ? Math.max(0.3, maxDur) : Math.min(0.24, beatSec * 0.7)));
+        osc.start(now);
+        osc.stop(now + (isFinal ? Math.max(0.32, maxDur + 0.02) : Math.min(0.26, beatSec * 0.72)));
+      } else if (countSoundMode === "pop") {
+        osc.type = "sine";
+        osc.frequency.setValueAtTime(isFinal ? 660 : 440, now);
+        osc.frequency.exponentialRampToValueAtTime(isFinal ? 1320 : 880, now + Math.min(0.1, dur));
+        gain.gain.setValueAtTime(peakGain, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + dur);
+        osc.start(now);
+        osc.stop(now + dur + 0.02);
+      }
+    }
+
+    function clearCountSoundTimers() {
+      if (countStartTimerId) {
+        clearTimeout(countStartTimerId);
+        countStartTimerId = null;
+      }
+      if (countIntervalId) {
+        clearInterval(countIntervalId);
+        countIntervalId = null;
+      }
+    }
+
+    function schedulePlaybackCountSound(songDurationSec, songTitle) {
+      clearCountSoundTimers();
+      if (countSoundDurationSec <= 0 || countSoundVol <= 0) return;
+
+      const mode = savedCountConfig.timingMode || "end";
+      let delayMs = 0;
+      let activeWindowSec = countSoundDurationSec;
+
+      if (mode === "start") {
+        delayMs = 0;
+        if (songDurationSec > 0 && songDurationSec < countSoundDurationSec) {
+          activeWindowSec = songDurationSec;
+        }
+      } else if (mode === "custom_sec") {
+        const offsetSec = savedCountConfig.offsetSec || 0;
+        delayMs = offsetSec * 1000;
+        if (songDurationSec > 0) {
+          if (offsetSec >= songDurationSec) return;
+          activeWindowSec = Math.min(countSoundDurationSec, songDurationSec - offsetSec);
+        }
+      } else {
+        if (songDurationSec > 0) {
+          if (songDurationSec > countSoundDurationSec) {
+            delayMs = (songDurationSec - countSoundDurationSec) * 1000;
+          } else {
+            activeWindowSec = songDurationSec;
+          }
+        }
+      }
+
+      const beatIntervalMs = (60 / countBpm) * 1000;
+      const totalBeats = Math.max(1, Math.round(activeWindowSec * (countBpm / 60)));
+
+      countStartTimerId = setTimeout(() => {
+        let beatCount = 0;
+        const tick = () => {
+          beatCount++;
+          const isFinal = beatCount >= totalBeats;
+          playSingleCountBeep(isFinal);
+
+          if (!isFinal) {
+            systemStatus.textContent = `🥁 カウント中（${countBpm} BPM / ${beatCount}/${totalBeats}拍）: ${songTitle}`;
+            systemStatus.style.color = "#f59e0b";
+          }
+
+          if (beatCount >= totalBeats) {
+            clearCountSoundTimers();
+          }
+        };
+
+        tick();
+        if (totalBeats > 1) {
+          countIntervalId = setInterval(tick, beatIntervalMs);
+        }
+      }, delayMs);
+    }
+
+    // ==========================================
+    // リアルタイム音量制御
+    // ==========================================
+    function stopVolumeEnvelope() {
+      if (volumeEnvelopeRafId) {
+        cancelAnimationFrame(volumeEnvelopeRafId);
+        volumeEnvelopeRafId = null;
+      }
+      liveVolBar.style.width = "0%";
+      liveVolText.textContent = "0%";
+    }
+
+    function startVolumeEnvelope(song) {
+      stopVolumeEnvelope();
+
+      const updateVolume = () => {
+        if (audioPlayer.paused || currentPlayingIndex === -1) {
+          stopVolumeEnvelope();
+          return;
+        }
+
+        const t = audioPlayer.currentTime;
+        const totalDur = song.duration > 0
+          ? song.duration
+          : (Number.isFinite(audioPlayer.duration) && audioPlayer.duration > 0 ? audioPlayer.duration : 0);
+
+        const baseVol = (song.baseVolume ?? 40) / 100;
+        const peakVol = (song.peakVolume ?? 100) / 100;
+        const hStart = song.highlightStart || 0;
+        const hEnd = song.highlightEnd || 0;
+        const hasHighlight = hEnd > hStart;
+
+        const RAMP_SEC = 0.6;
+        let targetVol = baseVol;
+
+        if (hasHighlight) {
+          if (t >= hStart && t <= hEnd) {
+            if (t - hStart < RAMP_SEC && (hEnd - hStart) > RAMP_SEC * 2) {
+              const ratio = (t - hStart) / RAMP_SEC;
+              targetVol = baseVol + (peakVol - baseVol) * ratio;
+            } else if (hEnd - t < RAMP_SEC && (hEnd - hStart) > RAMP_SEC * 2) {
+              const ratio = (hEnd - t) / RAMP_SEC;
+              targetVol = baseVol + (peakVol - baseVol) * ratio;
+            } else {
+              targetVol = peakVol;
+            }
+          } else {
+            targetVol = baseVol;
+          }
+        }
+
+        let fadeInFactor = 1.0;
+        if (song.fadeIn > 0 && t < song.fadeIn) {
+          fadeInFactor = Math.max(0, Math.min(1, t / song.fadeIn));
+        }
+
+        let fadeOutFactor = 1.0;
+        if (song.fadeOut > 0 && totalDur > 0) {
+          const remaining = totalDur - t;
+          if (remaining < song.fadeOut) {
+            fadeOutFactor = Math.max(0, Math.min(1, remaining / song.fadeOut));
+          }
+        }
+
+        const finalVol = Math.max(0, Math.min(1, targetVol * fadeInFactor * fadeOutFactor));
+        audioPlayer.volume = finalVol;
+
+        const pct = Math.round(finalVol * 100);
+        liveVolBar.style.width = `${pct}%`;
+        liveVolText.textContent = `${pct}%`;
+
+        volumeEnvelopeRafId = requestAnimationFrame(updateVolume);
+      };
+
+      volumeEnvelopeRafId = requestAnimationFrame(updateVolume);
+    }
+
+    // ==========================================
+    // ハンバーガーメニュー開閉＆画面切り替え
+    // ==========================================
+    function openDrawer() {
+      navDrawer.classList.add("open");
+      drawerBackdrop.classList.add("open");
+    }
+
+    function closeDrawer() {
+      navDrawer.classList.remove("open");
+      drawerBackdrop.classList.remove("open");
+    }
+
+    menuToggleBtn.addEventListener("click", openDrawer);
+    drawerBackdrop.addEventListener("click", closeDrawer);
+
+    navItemBtns.forEach(btn => {
+      btn.addEventListener("click", async () => {
+        const targetId = btn.dataset.target;
+        activeScreenId = targetId;
+
+        navItemBtns.forEach(b => b.classList.remove("active"));
+        btn.classList.add("active");
+
+        screenViews.forEach(view => {
+          view.classList.toggle("active", view.id === targetId);
+        });
+
+        if (targetId === "mainScreen") pageTitle.textContent = "🎵 メイン画面";
+        else if (targetId === "faceAuthScreen") pageTitle.textContent = "👤 顔認証設定";
+        else pageTitle.textContent = "⚙️ 設定画面";
+
+        closeDrawer();
+
+        if (targetId === "settingsScreen") {
+          if (autoOffInSettingsToggle.checked && isCameraActive) {
+            stopCameraHardware("⚙️ 設定中のためカメラを自動停止しています");
+          }
+        } else {
+          if (!userManualCamOff && !isCameraActive && startOverlay.style.display === "none") {
+            await startCameraHardware();
+          }
+        }
+      });
+    });
+
+    // ==========================================
+    // 1日の再生回数管理
+    // ==========================================
+    function getTodayKey() {
+      const now = new Date();
+      return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+    }
+
+    function loadDailyStats() {
+      const saved = JSON.parse(localStorage.getItem("person_sound_daily") || "{}");
+      const today = getTodayKey();
+      if (saved.date === today) {
+        dailyPlayedCount = saved.count || 0;
+      } else {
+        dailyPlayedCount = 0;
+        saveDailyStats();
+      }
+      dailyPlayedEl.textContent = dailyPlayedCount;
+    }
+
+    function saveDailyStats() {
+      localStorage.setItem("person_sound_daily", JSON.stringify({
+        date: getTodayKey(),
+        count: dailyPlayedCount
+      }));
+    }
+
+    function saveSongs() {
+      scheduleCloudPush();
+    }
+
+    function escapeHtml(str) {
+      return str.replace(/[&<>"']/g, m => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[m]));
+    }
+
+    function formatDurationLabel(sec) {
+      return sec === 0 ? "最後まで" : `${sec}秒間`;
+    }
+
+    // ==========================================
+    // 曲リスト描画
+    // ==========================================
+    function renderAllSongLists(playingIdx = currentPlayingIndex) {
+      populateDirectionActionSelects();
+      mainSongCountBadge.textContent = `${songList.length}曲`;
+
+      mainSongListContainer.innerHTML = "";
+      settingSongListContainer.innerHTML = "";
+
+      if (songList.length === 0) {
+        mainSongListContainer.innerHTML = `<div style="color:#64748b; font-size:0.85rem; text-align:center; padding:12px;">曲が登録されていません。左上の「☰ ➔ 設定」から追加してください。</div>`;
+        return;
+      }
+
+      songList.forEach((item, idx) => {
+        const hasHighlight = item.highlightEnd > item.highlightStart;
+        const isGithubLocal = isGitHubRelativePath(item.url);
+        const isDropbox = item.url.includes("dropbox.com");
+
+        const mainItem = document.createElement("div");
+        mainItem.className = "main-song-item" + (idx === playingIdx ? " playing" : "");
+        mainItem.innerHTML = `
+          <div style="overflow: hidden; flex: 1;">
+            <div class="main-song-title">${idx + 1}. ${escapeHtml(item.title)}</div>
+            <div class="main-song-meta">
+              ${isGithubLocal ? `<span class="meta-tag github">📁 GitHub直下</span>` : ""}
+              ${isDropbox ? `<span class="meta-tag github">📦 Dropbox</span>` : ""}
+              <span class="meta-tag">⏱️ ${formatDurationLabel(item.duration)}</span>
+              <span class="meta-tag">🔉 通常${item.baseVolume}%</span>
+              ${hasHighlight ? `<span class="meta-tag accent">🔥 ${item.highlightStart}〜${item.highlightEnd}秒は${item.peakVolume}%</span>` : ""}
+              ${(item.fadeIn > 0 || item.fadeOut > 0) ? `<span class="meta-tag">📈 IN:${item.fadeIn}s / OUT:${item.fadeOut}s</span>` : ""}
+            </div>
+          </div>
+          <span class="play-pill">${idx === playingIdx ? "🎵 再生中" : "▶ 試聴"}</span>
+        `;
+        mainItem.addEventListener("click", () => {
+          playSpecificSong(idx, true);
+        });
+        mainSongListContainer.appendChild(mainItem);
+
+        const setCard = document.createElement("div");
+        setCard.className = "setting-song-card";
+
+        const headerDiv = document.createElement("div");
+        headerDiv.className = "setting-song-header";
+        headerDiv.innerHTML = `
+          <div style="overflow: hidden; flex: 1;">
+            <div style="font-weight: bold; font-size: 0.92rem; color: #f8fafc; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+              ${idx + 1}. ${escapeHtml(item.title)}
+            </div>
+            <div style="font-size: 0.72rem; color: #64748b; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+              ${escapeHtml(item.url)}
+            </div>
+          </div>
+        `;
+
+        const actionsDiv = document.createElement("div");
+        actionsDiv.className = "setting-song-actions";
+
+        const playBtn = document.createElement("button");
+        playBtn.type = "button";
+        playBtn.className = "mini-btn mini-play";
+        playBtn.textContent = "▶ 試聴";
+        playBtn.addEventListener("click", () => playSpecificSong(idx, true));
+
+        const delBtn = document.createElement("button");
+        delBtn.type = "button";
+        delBtn.className = "mini-btn mini-del";
+        delBtn.textContent = "削除";
+        delBtn.addEventListener("click", () => {
+          if (currentPlayingIndex === idx) stopMusic();
+          songList.splice(idx, 1);
+          saveSongs();
+          renderAllSongLists();
+        });
+
+        actionsDiv.appendChild(playBtn);
+        actionsDiv.appendChild(delBtn);
+        headerDiv.appendChild(actionsDiv);
+        setCard.appendChild(headerDiv);
+
+        const durRow = document.createElement("div");
+        durRow.className = "per-song-ctrl";
+        durRow.innerHTML = `<span>⏱️ 全体の再生長さ:</span>`;
+        durRow.appendChild(createStepperControl(
+          formatDurationLabel(item.duration),
+          () => {
+            let sIdx = DURATION_STEPS.indexOf(item.duration);
+            if (sIdx === -1) sIdx = 4;
+            if (sIdx > 0) {
+              item.duration = DURATION_STEPS[sIdx - 1];
+              saveSongs();
+              renderAllSongLists();
+            }
+          },
+          () => {
+            let sIdx = DURATION_STEPS.indexOf(item.duration);
+            if (sIdx === -1) sIdx = 4;
+            if (sIdx < DURATION_STEPS.length - 1) {
+              item.duration = DURATION_STEPS[sIdx + 1];
+              saveSongs();
+              renderAllSongLists();
+            }
+          }
+        ));
+        setCard.appendChild(durRow);
+
+        const fiRow = document.createElement("div");
+        fiRow.className = "per-song-ctrl";
+        fiRow.innerHTML = `<span>📈 フェードイン（徐々に大きく）:</span>`;
+        fiRow.appendChild(createStepperControl(
+          `${item.fadeIn}秒`,
+          () => {
+            let fIdx = FADE_STEPS.indexOf(item.fadeIn);
+            if (fIdx === -1) fIdx = 2;
+            if (fIdx > 0) {
+              item.fadeIn = FADE_STEPS[fIdx - 1];
+              saveSongs();
+              renderAllSongLists();
+            }
+          },
+          () => {
+            let fIdx = FADE_STEPS.indexOf(item.fadeIn);
+            if (fIdx === -1) fIdx = 2;
+            if (fIdx < FADE_STEPS.length - 1) {
+              item.fadeIn = FADE_STEPS[fIdx + 1];
+              saveSongs();
+              renderAllSongLists();
+            }
+          }
+        ));
+        setCard.appendChild(fiRow);
+
+        const foRow = document.createElement("div");
+        foRow.className = "per-song-ctrl";
+        foRow.innerHTML = `<span>📉 フェードアウト（徐々に小さく）:</span>`;
+        foRow.appendChild(createStepperControl(
+          `${item.fadeOut}秒`,
+          () => {
+            let fIdx = FADE_STEPS.indexOf(item.fadeOut);
+            if (fIdx === -1) fIdx = 2;
+            if (fIdx > 0) {
+              item.fadeOut = FADE_STEPS[fIdx - 1];
+              saveSongs();
+              renderAllSongLists();
+            }
+          },
+          () => {
+            let fIdx = FADE_STEPS.indexOf(item.fadeOut);
+            if (fIdx === -1) fIdx = 2;
+            if (fIdx < FADE_STEPS.length - 1) {
+              item.fadeOut = FADE_STEPS[fIdx + 1];
+              saveSongs();
+              renderAllSongLists();
+            }
+          }
+        ));
+        setCard.appendChild(foRow);
+
+        const subBox = document.createElement("div");
+        subBox.className = "sub-box";
+        subBox.innerHTML = `<div class="sub-box-title">🔥 一番流したい区間（盛り上げ音量）の設定</div>`;
+
+        const rangeRow = document.createElement("div");
+        rangeRow.style.display = "flex";
+        rangeRow.style.alignItems = "center";
+        rangeRow.style.justifyContent = "space-between";
+        rangeRow.style.fontSize = "0.8rem";
+        rangeRow.innerHTML = `<span>大きく流す時間帯:</span>`;
+
+        const timeInputs = document.createElement("div");
+        timeInputs.className = "time-range-inputs";
+
+        const startInput = document.createElement("input");
+        startInput.type = "number";
+        startInput.min = "0";
+        startInput.max = "600";
+        startInput.step = "1";
+        startInput.className = "sec-num-input";
+        startInput.value = String(item.highlightStart);
+
+        const endInput = document.createElement("input");
+        endInput.type = "number";
+        endInput.min = "0";
+        endInput.max = "600";
+        endInput.step = "1";
+        endInput.className = "sec-num-input";
+        endInput.value = String(item.highlightEnd);
+
+        const updateRange = () => {
+          item.highlightStart = Math.max(0, parseFloat(startInput.value) || 0);
+          item.highlightEnd = Math.max(0, parseFloat(endInput.value) || 0);
+          saveSongs();
+        };
+        startInput.addEventListener("change", () => { updateRange(); renderAllSongLists(); });
+        endInput.addEventListener("change", () => { updateRange(); renderAllSongLists(); });
+
+        timeInputs.appendChild(startInput);
+        timeInputs.appendChild(document.createTextNode("秒 〜 "));
+        timeInputs.appendChild(endInput);
+        timeInputs.appendChild(document.createTextNode("秒"));
+        rangeRow.appendChild(timeInputs);
+        subBox.appendChild(rangeRow);
+
+        subBox.appendChild(createVolumeSliderRow("🔥 一番流したい区間の音量:", item.peakVolume, "#fbbf24", (v) => {
+          item.peakVolume = v;
+          saveSongs();
+        }));
+
+        subBox.appendChild(createVolumeSliderRow("🔉 それ以外の区間の音量:", item.baseVolume, "#38bdf8", (v) => {
+          item.baseVolume = v;
+          saveSongs();
+        }));
+
+        setCard.appendChild(subBox);
+        settingSongListContainer.appendChild(setCard);
+      });
+    }
+
+    function createStepperControl(labelText, onMinus, onPlus) {
+      const wrap = document.createElement("div");
+      wrap.className = "num-control";
+
+      const minusBtn = document.createElement("button");
+      minusBtn.type = "button";
+      minusBtn.className = "step-btn";
+      minusBtn.style.width = "30px";
+      minusBtn.style.height = "30px";
+      minusBtn.textContent = "−";
+      minusBtn.addEventListener("click", onMinus);
+
+      const badge = document.createElement("span");
+      badge.className = "val-badge";
+      badge.style.fontSize = "0.86rem";
+      badge.textContent = labelText;
+
+      const plusBtn = document.createElement("button");
+      plusBtn.type = "button";
+      plusBtn.className = "step-btn";
+      plusBtn.style.width = "30px";
+      plusBtn.style.height = "30px";
+      plusBtn.textContent = "＋";
+      plusBtn.addEventListener("click", onPlus);
+
+      wrap.appendChild(minusBtn);
+      wrap.appendChild(badge);
+      wrap.appendChild(plusBtn);
+      return wrap;
+    }
+
+    function createVolumeSliderRow(labelStr, initVal, colorHex, onChange) {
+      const row = document.createElement("div");
+      row.style.display = "flex";
+      row.style.alignItems = "center";
+      row.style.gap = "8px";
+      row.style.fontSize = "0.8rem";
+
+      const lbl = document.createElement("span");
+      lbl.textContent = labelStr;
+      lbl.style.whiteSpace = "nowrap";
+
+      const slider = document.createElement("input");
+      slider.type = "range";
+      slider.min = "0";
+      slider.max = "100";
+      slider.value = String(initVal);
+
+      const valSpan = document.createElement("span");
+      valSpan.style.width = "38px";
+      valSpan.style.textAlign = "right";
+      valSpan.style.fontWeight = "bold";
+      valSpan.style.color = colorHex;
+      valSpan.textContent = `${initVal}%`;
+
+      slider.addEventListener("input", (e) => {
+        const v = parseInt(e.target.value, 10);
+        valSpan.textContent = `${v}%`;
+        onChange(v);
+      });
+
+      row.appendChild(lbl);
+      row.appendChild(slider);
+      row.appendChild(valSpan);
+      return row;
+    }
+
+    addUrlBtn.addEventListener("click", () => {
+      const normalizedUrl = normalizeAudioPath(newUrlInput.value);
+      if (!normalizedUrl) return;
+      let title = newTitleInput.value.trim();
+      if (!title) {
+        const cleanPath = normalizedUrl.split("?")[0];
+        const fileName = decodeURIComponent(cleanPath.substring(cleanPath.lastIndexOf("/") + 1));
+        title = fileName || `登録曲 ${songList.length + 1}`;
+      }
+      songList.push({
+        title,
+        url: normalizedUrl,
+        baseVolume: 80,
+        peakVolume: 100,
+        highlightStart: 0,
+        highlightEnd: 0,
+        fadeIn: 0.5,
+        fadeOut: 1.5,
+        duration: 0
+      });
+      newTitleInput.value = "";
+      newUrlInput.value = "";
+      saveSongs();
+      renderAllSongLists();
+    });
+
+    // ==========================================
+    // 音楽再生・停止ロジック
+    // ==========================================
+    function restoreIdleStatus() {
+      if (isCameraActive) {
+        if (savedFaceConfig.enabled) {
+          systemStatus.textContent = registeredFaces.length > 0
+            ? `👤 顔認証待機中（登録済み ${registeredFaces.length}件のみ反応）`
+            : "⚠️ 顔認証ONですが顔が未登録です（「☰ ➔ 👤 顔認証設定」から登録）";
+          systemStatus.style.color = registeredFaces.length > 0 ? "#38bdf8" : "#f59e0b";
+        } else {
+          systemStatus.textContent = "👀 入退出の通過を待機中（全員反応モード）";
+          systemStatus.style.color = "#38bdf8";
+        }
+      } else {
+        systemStatus.textContent = "📷 カメラは停止中です（「カメラ起動」で検知開始）";
+        systemStatus.style.color = "#94a3b8";
+      }
+    }
+
+    function stopMusic() {
+      if (stopTimerId) {
+        clearTimeout(stopTimerId);
+        stopTimerId = null;
+      }
+      clearCountSoundTimers();
+      stopVolumeEnvelope();
+      audioPlayer.pause();
+      audioPlayer.currentTime = 0;
+      currentPlayingIndex = -1;
+      countStatBox.classList.remove("highlight");
+      renderAllSongLists(-1);
+    }
+
+    function playSpecificSong(idx, isTest = false, prefixLabel = "") {
+      loadDailyStats();
+
+      if (!isTest && dailyLimit > 0 && dailyPlayedCount >= dailyLimit) {
+        systemStatus.textContent = `🛑 本日の再生上限（${dailyLimit}回）に達しました`;
+        systemStatus.style.color = "#f59e0b";
+        dailyStatBox.classList.add("highlight");
+        return;
+      }
+
+      if (!songList[idx]) return;
+      const targetSong = songList[idx];
+      targetSong.url = normalizeAudioPath(targetSong.url);
+
+      stopMusic();
+      lastPlayedIndex = idx;
+      currentPlayingIndex = idx;
+
+      audioPlayer.src = resolveSafeAudioUrl(targetSong.url);
+      audioPlayer.volume = targetSong.fadeIn > 0 ? 0 : ((targetSong.baseVolume ?? 40) / 100);
+
+      audioPlayer.play().then(() => {
+        countStatBox.classList.add("highlight");
+        renderAllSongLists(idx);
+        systemStatus.textContent = `${prefixLabel}🎵 再生中: ${targetSong.title}`;
+        systemStatus.style.color = "#10b981";
+
+        if (!isTest) {
+          dailyPlayedCount++;
+          dailyPlayedEl.textContent = dailyPlayedCount;
+          saveDailyStats();
+        }
+
+        startVolumeEnvelope(targetSong);
+        const effectiveDur = targetSong.duration > 0
+          ? targetSong.duration
+          : (Number.isFinite(audioPlayer.duration) && audioPlayer.duration > 0 ? audioPlayer.duration : 0);
+        schedulePlaybackCountSound(effectiveDur, targetSong.title);
+
+        if (targetSong.duration > 0) {
+          stopTimerId = setTimeout(() => {
+            stopMusic();
+            restoreIdleStatus();
+          }, targetSong.duration * 1000);
+        }
+      }).catch((err) => {
+        currentPlayingIndex = -1;
+        clearCountSoundTimers();
+        stopVolumeEnvelope();
+        systemStatus.textContent = `❌ 再生失敗(${err.name}): 「${targetSong.url}」を確認してください`;
+        systemStatus.style.color = "#ef4444";
+      });
+    }
+
+    function playRandomSong(isTest = false, prefixLabel = "") {
+      if (songList.length === 0) {
+        systemStatus.textContent = "⚠️ 曲が登録されていません（設定から追加してください）";
+        systemStatus.style.color = "#ef4444";
+        return;
+      }
+      let randomIdx = Math.floor(Math.random() * songList.length);
+      if (songList.length > 1 && randomIdx === lastPlayedIndex) {
+        randomIdx = (randomIdx + 1) % songList.length;
+      }
+      playSpecificSong(randomIdx, isTest, prefixLabel);
+    }
+
+    audioPlayer.addEventListener("ended", () => {
+      stopMusic();
+      restoreIdleStatus();
+    });
+
+    // ==========================================
+    // 設定・ボタンイベント
+    // ==========================================
+    toggleCamViewBtn.addEventListener("click", () => {
+      isCamHidden = !isCamHidden;
+      cameraPipWrapper.classList.toggle("hidden-cam", isCamHidden);
+      toggleCamViewBtn.textContent = isCamHidden ? "👁 ワイプ表示" : "🙈 ワイプ隠す";
+    });
+
+    targetMinusBtn.addEventListener("click", () => {
+      if (targetCount > 1) {
+        targetCount--;
+        savedOpsConfig.targetCount = targetCount;
+        targetCountDisplay.textContent = `${targetCount}人`;
+        targetCountHud.textContent = targetCount;
+        scheduleCloudPush();
+      }
+    });
+    targetPlusBtn.addEventListener("click", () => {
+      if (targetCount < 99) {
+        targetCount++;
+        savedOpsConfig.targetCount = targetCount;
+        targetCountDisplay.textContent = `${targetCount}人`;
+        targetCountHud.textContent = targetCount;
+        scheduleCloudPush();
+      }
+    });
+
+    dailyMinusBtn.addEventListener("click", () => {
+      if (dailyLimit > 0) {
+        dailyLimit--;
+        savedOpsConfig.dailyLimit = dailyLimit;
+        dailyLimitDisplay.textContent = dailyLimit === 0 ? "無制限" : `${dailyLimit}回`;
+        dailyLimitHud.textContent = dailyLimit === 0 ? "∞" : dailyLimit;
+        dailyStatBox.classList.remove("highlight");
+        scheduleCloudPush();
+      }
+    });
+    dailyPlusBtn.addEventListener("click", () => {
+      if (dailyLimit < 200) {
+        dailyLimit++;
+        savedOpsConfig.dailyLimit = dailyLimit;
+        dailyLimitDisplay.textContent = `${dailyLimit}回`;
+        dailyLimitHud.textContent = dailyLimit;
+        scheduleCloudPush();
+      }
+    });
+
+    coolMinusBtn.addEventListener("click", () => {
+      if (cooldownSec > 1) {
+        cooldownSec--;
+        savedOpsConfig.cooldownSec = cooldownSec;
+        cooldownDisplay.textContent = `${cooldownSec}秒`;
+        scheduleCloudPush();
+      }
+    });
+    coolPlusBtn.addEventListener("click", () => {
+      if (cooldownSec < 60) {
+        cooldownSec++;
+        savedOpsConfig.cooldownSec = cooldownSec;
+        cooldownDisplay.textContent = `${cooldownSec}秒`;
+        scheduleCloudPush();
+      }
+    });
+
+    function updateCountDurationUI() {
+      countSoundDurationSec = COUNT_DURATION_STEPS[countDurIndex];
+      syncCountConfigUI();
+      saveCountConfig();
+    }
+
+    countDurMinusBtn.addEventListener("click", () => {
+      if (countDurIndex > 0) {
+        countDurIndex--;
+        updateCountDurationUI();
+      }
+    });
+
+    countDurPlusBtn.addEventListener("click", () => {
+      if (countDurIndex < COUNT_DURATION_STEPS.length - 1) {
+        countDurIndex++;
+        updateCountDurationUI();
+      }
+    });
+
+    function setBpmValue(newBpm) {
+      countBpm = Math.max(40, Math.min(240, newBpm));
+      syncCountConfigUI();
+      saveCountConfig();
+    }
+
+    bpmMinusBtn.addEventListener("click", () => setBpmValue(countBpm - 1));
+    bpmPlusBtn.addEventListener("click", () => setBpmValue(countBpm + 1));
+    bpmSlider.addEventListener("input", (e) => setBpmValue(parseInt(e.target.value, 10)));
+
+    countSoundType.addEventListener("change", (e) => {
+      countSoundMode = e.target.value;
+      saveCountConfig();
+      playSingleCountBeep(false);
+    });
+
+    countVolumeSlider.addEventListener("input", (e) => {
+      const val = parseInt(e.target.value, 10);
+      countSoundVol = val / 100;
+      countVolumeVal.textContent = `${val}%`;
+      saveCountConfig();
+    });
+
+    let testCountTimer = null;
+    testCountSoundBtn.addEventListener("click", () => {
+      if (testCountTimer) {
+        clearInterval(testCountTimer);
+        testCountTimer = null;
+      }
+      if (countSoundDurationSec <= 0) {
+        playSingleCountBeep(true);
+        return;
+      }
+      const beatIntervalMs = (60 / countBpm) * 1000;
+      const totalBeats = Math.max(1, Math.round(countSoundDurationSec * (countBpm / 60)));
+      let step = 0;
+
+      const runTest = () => {
+        step++;
+        const isFinal = step >= totalBeats;
+        playSingleCountBeep(isFinal);
+        if (isFinal && testCountTimer) {
+          clearInterval(testCountTimer);
+          testCountTimer = null;
+        }
+      };
+
+      runTest();
+      if (totalBeats > 1) {
+        testCountTimer = setInterval(runTest, beatIntervalMs);
+      }
+    });
+
+    stopMusicBtn.addEventListener("click", () => {
+      stopMusic();
+      stopAllSfx();
+      restoreIdleStatus();
+    });
+    resetCountBtn.addEventListener("click", () => {
+      currentCount = 0;
+      currentCountEl.textContent = "0";
+      stopMusic();
+      systemStatus.textContent = "🔄 検知カウントを0にリセットしました";
+      systemStatus.style.color = "#38bdf8";
+    });
+    resetDailyBtn.addEventListener("click", () => {
+      dailyPlayedCount = 0;
+      dailyPlayedEl.textContent = "0";
+      dailyStatBox.classList.remove("highlight");
+      saveDailyStats();
+      systemStatus.textContent = "📅 本日の再生回数を0にリセットしました";
+      systemStatus.style.color = "#38bdf8";
+    });
+
+    // ==========================================
+    // 顔認証（高精度化 ＋ リアルタイムスコア表示）
+    // ==========================================
+    async function runFaceRecognitionStep() {
+      if (isRunningFaceCheck || !faceModelsLoaded || !isCameraActive || webcamVideo.readyState < 2) return;
+      if (!savedFaceConfig.enabled && activeScreenId !== "faceAuthScreen") return;
+
+      isRunningFaceCheck = true;
+      try {
+        const detection = await faceapi
+          .detectSingleFace(webcamVideo, new faceapi.TinyFaceDetectorOptions({ inputSize: 224, scoreThreshold: 0.30 }))
+          .withFaceLandmarks()
+          .withFaceDescriptor();
+
+        const now = Date.now();
+        if (detection) {
+          const result = findBestMatchingFace(detection.descriptor);
+          if (result) {
+            const distText = result.distance.toFixed(2);
+            faceScoreLiveDebug.textContent = result.isMatch
+              ? `✅ 認証OK: ${result.name}（一致スコア ${distText} ≦ 基準 ${savedFaceConfig.threshold.toFixed(2)}）`
+              : `⚠️ 惜しい未一致: ${result.name}（スコア ${distText} ＞ 基準 ${savedFaceConfig.threshold.toFixed(2)}）`;
+            faceScoreLiveDebug.style.color = result.isMatch ? "#10b981" : "#f59e0b";
+
+            if (result.isMatch) {
+              lastMatchedFaceName = result.name;
+              lastMatchedTime = now;
+              if (trackStartX !== null) {
+                trackVerifiedNameThisPass = result.name;
+              }
+              mainMatchedName.textContent = `${result.name}（認証OK）`;
+              mainMatchedName.style.color = "#10b981";
+              faceLiveDetectBadge.textContent = `✅ 認証一致: ${result.name}`;
+              faceLiveDetectBadge.style.color = "#10b981";
+            } else {
+              if (now - lastMatchedTime > 2000 && !trackVerifiedNameThisPass) {
+                lastMatchedFaceName = null;
+                mainMatchedName.textContent = `未一致 (${distText})`;
+                mainMatchedName.style.color = "#f59e0b";
+              }
+              faceLiveDetectBadge.textContent = `👤 顔検出中（スコア ${distText}）`;
+              faceLiveDetectBadge.style.color = "#38bdf8";
+            }
+          } else {
+            faceScoreLiveDebug.textContent = "👤 顔を検出中（登録リストが空のため照合待ち）";
+            faceLiveDetectBadge.textContent = "👤 顔検出中（未登録）";
+          }
+        } else {
+          if (now - lastMatchedTime > 2500 && !trackVerifiedNameThisPass) {
+            lastMatchedFaceName = null;
+            mainMatchedName.textContent = "待機中";
+            mainMatchedName.style.color = "#f8fafc";
+          }
+          faceLiveDetectBadge.textContent = "カメラに顔を映してください";
+          faceLiveDetectBadge.style.color = "#94a3b8";
+        }
+      } catch (e) {
+      } finally {
+        isRunningFaceCheck = false;
+      }
+    }
+
+    // ==========================================
+    // メイン検出ループ
+    // ==========================================
+    async function detectLoop() {
+      if (!isCameraActive || !personModel) return;
+
+      if (webcamVideo.readyState >= 2 && webcamVideo.videoWidth > 0) {
+        const vw = webcamVideo.videoWidth;
+        const vh = webcamVideo.videoHeight;
+
+        if (activeScreenId === "faceAuthScreen") {
+          faceMirrorCanvas.width = vw;
+          faceMirrorCanvas.height = vh;
+          const mCtx = faceMirrorCanvas.getContext("2d");
+          mCtx.drawImage(webcamVideo, 0, 0, vw, vh);
+        }
+
+        const predictions = await personModel.detect(webcamVideo);
+        const ctx = overlayCanvas.getContext("2d");
+        overlayCanvas.width = vw;
+        overlayCanvas.height = vh;
+        ctx.clearRect(0, 0, vw, vh);
+
+        const persons = predictions.filter(p => p.class === "person" && p.score >= 0.45);
+        const now = Date.now();
+
+        if (persons.length > 0) {
+          if (trackStartX === null || now - trackLastSeenTime > savedWalkConfig.holdMs) {
+            persons.sort((a, b) => (b.bbox[2] * b.bbox[3]) - (a.bbox[2] * a.bbox[3]));
+            const initPerson = persons[0];
+            trackStartX = (initPerson.bbox[0] + initPerson.bbox[2] / 2) / vw;
+            trackTriggeredThisPass = false;
+            trackVerifiedNameThisPass = (lastMatchedFaceName && now - lastMatchedTime <= 2000)
+              ? lastMatchedFaceName
+              : null;
+          }
+
+          runFaceRecognitionStep();
+
+          const verifiedName = trackVerifiedNameThisPass || ((lastMatchedFaceName && now - lastMatchedTime <= 2500) ? lastMatchedFaceName : null);
+          if (verifiedName && !trackVerifiedNameThisPass) {
+            trackVerifiedNameThisPass = verifiedName;
+          }
+          const isVerifiedNow = !savedFaceConfig.enabled || Boolean(verifiedName);
+
+          if (isVerifiedNow) {
+            cameraPipWrapper.classList.add("person-active");
+            cameraPipWrapper.classList.remove("person-unverified");
+          } else {
+            cameraPipWrapper.classList.remove("person-active");
+            cameraPipWrapper.classList.add("person-unverified");
+          }
+
+          persons.sort((a, b) => (b.bbox[2] * b.bbox[3]) - (a.bbox[2] * a.bbox[3]));
+          const mainPerson = persons[0];
+
+          persons.forEach((p, idx) => {
+            const [x, y, w, h] = p.bbox;
+            ctx.strokeStyle = isVerifiedNow ? "#10b981" : "#f59e0b";
+            ctx.lineWidth = idx === 0 ? 4 : 2;
+            ctx.strokeRect(x, y, w, h);
+          });
+
+          const [mx, my, mw, mh] = mainPerson.bbox;
+          const centerXNorm = (mx + mw / 2) / vw;
+
+          ctx.fillStyle = isVerifiedNow ? "#10b981" : "#f59e0b";
+          ctx.beginPath();
+          ctx.arc(mx + mw / 2, my + mh / 2, 7, 0, Math.PI * 2);
+          ctx.fill();
+
+          trackLastX = centerXNorm;
+          trackLastSeenTime = now;
+
+          const deltaX = trackLastX - trackStartX;
+          if (!trackTriggeredThisPass && Math.abs(deltaX) >= savedWalkConfig.moveRatio) {
+            if (isVerifiedNow) {
+              if (now - lastTriggerTime >= cooldownSec * 1000) {
+                lastTriggerTime = now;
+                trackTriggeredThisPass = true;
+
+                const movedLeftToRight = deltaX > 0;
+                const isEnter = enterDirectionSelect.value === "left_to_right"
+                  ? movedLeftToRight
+                  : !movedLeftToRight;
+
+                const authName = savedFaceConfig.enabled ? (verifiedName || "") : "";
+                handlePersonDirectionEvent(isEnter ? "enter" : "exit", false, authName);
+              }
+            } else {
+              if (currentPlayingIndex === -1) {
+                systemStatus.textContent = "🔍 通過検知中... 顔認証を確認しています";
+                systemStatus.style.color = "#f59e0b";
+              }
+            }
+          }
+        } else {
+          cameraPipWrapper.classList.remove("person-active", "person-unverified");
+          if (trackStartX !== null && now - trackLastSeenTime > savedWalkConfig.holdMs) {
+            if (!trackTriggeredThisPass && savedFaceConfig.enabled && currentPlayingIndex === -1) {
+              restoreIdleStatus();
+            }
+            trackStartX = null;
+            trackLastX = null;
+            trackTriggeredThisPass = false;
+            trackVerifiedNameThisPass = null;
+          }
+        }
+      }
+
+      if (isCameraActive) {
+        requestAnimationFrame(detectLoop);
+      }
+    }
+
+    startBtn.addEventListener("click", async () => {
+      startBtn.disabled = true;
+      loadingMsg.textContent = "カメラ・人物検知AI・高精度顔認証AIを準備しています...";
+
+      try {
+        ensureAudioContext();
+        audioPlayer.play().then(() => audioPlayer.pause()).catch(() => {});
+
+        loadDailyStats();
+        syncAllUIFromState();
+        connectFirestoreSync(syncGroupId);
+
+        startOverlay.style.display = "none";
+        await startCameraHardware();
+      } catch (err) {
+        startBtn.disabled = false;
+        loadingMsg.textContent = "❌ 起動に失敗しました。カメラの許可を確認してください。";
+      }
+    });
+
+    // 初期描画＆起動前クラウド事前同期
+    loadDailyStats();
+    syncAllUIFromState();
+    updateCameraButtonsUI();
+    connectFirestoreSync(syncGroupId);
+  </script>
+</body>
+</html>
