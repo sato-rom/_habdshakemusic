@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <title>顔認証・入退出サウンドシステム（クラウド同期対応）</title>
+  <title>顔認証・入退出サウンドシステム（クラウド同期・詳細カウント設定対応）</title>
 
   <!-- TensorFlow.js & COCO-SSD（人物検知・通過方向判定AI） -->
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.17.0/dist/tf.min.js"></script>
@@ -11,7 +11,7 @@
   <!-- face-api.js（ブラウザ完結型・顔認証AI） -->
   <script src="https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7.13/dist/face-api.js"></script>
 
-  <!-- Firebase App & Firestore SDK (compat版で単一HTMLファイルから即利用可能) -->
+  <!-- Firebase App & Firestore SDK -->
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
 
@@ -107,7 +107,6 @@
       object-fit: cover;
     }
 
-    /* インカメラ時の鏡像（左右反転）表示 */
     .mirror-view {
       transform: scaleX(-1);
     }
@@ -550,7 +549,7 @@
       flex-shrink: 0;
     }
 
-    /* ワンタップ効果音パッド（2ボタン横並び） */
+    /* ワンタップ効果音パッド */
     .sfx-grid {
       display: grid;
       grid-template-columns: repeat(2, 1fr);
@@ -703,32 +702,32 @@
       align-items: center;
       justify-content: space-between;
       gap: 8px;
-      font-size: 0.86rem;
+      font-size: 0.85rem;
     }
 
     .num-control {
       display: flex;
       align-items: center;
-      gap: 8px;
+      gap: 6px;
     }
 
     .step-btn {
-      width: 34px;
-      height: 34px;
+      width: 32px;
+      height: 32px;
       border-radius: 50%;
       border: 1px solid #475569;
       background: #0f172a;
       color: #f8fafc;
-      font-size: 1.05rem;
+      font-size: 1rem;
       font-weight: bold;
       cursor: pointer;
     }
 
     .val-badge {
-      font-size: 0.9rem;
+      font-size: 0.86rem;
       font-weight: bold;
       color: #f59e0b;
-      min-width: 74px;
+      min-width: 72px;
       text-align: center;
     }
 
@@ -743,8 +742,8 @@
       border: 1px solid #475569;
       border-radius: 10px;
       padding: 7px 9px;
-      font-size: 0.82rem;
-      max-width: 205px;
+      font-size: 0.8rem;
+      max-width: 215px;
     }
 
     /* 入力フォーム */
@@ -827,14 +826,14 @@
       background: #162032;
       border: 1px solid #26354d;
       border-radius: 10px;
-      padding: 9px 10px;
+      padding: 10px;
       display: flex;
       flex-direction: column;
       gap: 8px;
     }
 
     .sub-box-title {
-      font-size: 0.78rem;
+      font-size: 0.79rem;
       font-weight: bold;
       color: #fbbf24;
     }
@@ -850,7 +849,7 @@
     }
 
     .sec-num-input {
-      width: 58px;
+      width: 64px;
       background: #0f172a;
       border: 1px solid #475569;
       color: #f8fafc;
@@ -858,6 +857,28 @@
       border-radius: 8px;
       font-size: 0.82rem;
       text-align: center;
+    }
+
+    .preset-chip-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+
+    .preset-chip {
+      background: #0f172a;
+      color: #38bdf8;
+      border: 1px solid #334155;
+      border-radius: 8px;
+      padding: 4px 8px;
+      font-size: 0.72rem;
+      font-weight: bold;
+      cursor: pointer;
+    }
+
+    .preset-chip:active {
+      background: rgba(56, 189, 248, 0.2);
+      border-color: #38bdf8;
     }
   </style>
 </head>
@@ -884,7 +905,7 @@
       <span>👤</span><span>顔認証設定（全端末共有）</span>
     </button>
     <button class="nav-item-btn" data-target="settingsScreen" type="button">
-      <span>⚙️</span><span>設定（帰宅照合・曲・時間）</span>
+      <span>⚙️</span><span>設定（帰宅照合・カウント詳細・曲）</span>
     </button>
   </nav>
 
@@ -898,7 +919,7 @@
   </div>
 
   <div class="container">
-    <!-- ヘッダー（左上に3本線ボタン） -->
+    <!-- ヘッダー -->
     <header>
       <button id="menuToggleBtn" type="button" aria-label="メニューを開く">
         <span></span>
@@ -976,7 +997,7 @@
         <div class="outfit-memory-list" id="outfitMemoryListContainer"></div>
       </div>
 
-      <!-- ワンタップ効果音パッド（2ボタンのみ） -->
+      <!-- ワンタップ効果音パッド -->
       <div class="card">
         <div style="display: flex; justify-content: space-between; align-items: center;">
           <span style="font-size: 0.95rem; font-weight: bold; color: #fbbf24;">⚡ 効果音ワンタップ再生</span>
@@ -1095,9 +1116,6 @@
           <input type="range" id="outfitSimilaritySlider" min="45" max="85" value="62" />
           <span id="outfitSimilarityVal" style="width: 44px; text-align: right; color: #f59e0b; font-weight: bold;">62%</span>
         </div>
-        <div style="font-size: 0.73rem; color: #94a3b8;">
-          ※ 照明の変化で反応しづらい場合は数値を下げる（50%〜55%）、関係ない人に反応する場合は上げる（70%以上）と安定します。
-        </div>
       </div>
 
       <!-- 入退出の方向＆曲割り当て設定 -->
@@ -1134,11 +1152,154 @@
         </div>
       </div>
 
+      <!-- ★ 曲再生中に流れるカウント音の詳細設定（全体共通） -->
+      <div class="card">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <span style="font-size: 0.95rem; font-weight: bold; color: #34d399;">⏱️ カウント音の詳細設定（全体基本・各曲で個別上書き可）</span>
+          <button class="mini-btn mini-play" id="testCountSoundBtn" type="button">▶ 試聴</button>
+        </div>
+
+        <!-- ワンタッププリセット -->
+        <div class="preset-chip-row">
+          <button type="button" class="preset-chip" data-cnt-preset="last3">🏁 ラスト3秒カウント</button>
+          <button type="button" class="preset-chip" data-cnt-preset="last5_fast">⚡ ラスト5秒(速め)</button>
+          <button type="button" class="preset-chip" data-cnt-preset="intro4">🎬 開始直後4拍</button>
+          <button type="button" class="preset-chip" data-cnt-preset="chime3">🔔 1秒おき3回チャイム</button>
+        </div>
+
+        <div class="ctrl-row">
+          <span>📍 鳴らす基準位置:</span>
+          <select id="countTimingMode" class="select-input">
+            <option value="end">曲が終わる直前（最後から逆算）</option>
+            <option value="start">曲が始まってすぐ（0.0秒から）</option>
+            <option value="custom_sec">開始から指定秒数後に開始</option>
+            <option value="before_end_sec">終了の指定秒数前に終了</option>
+          </select>
+        </div>
+
+        <div class="ctrl-row" id="countCustomOffsetRow" style="display: none;">
+          <span id="countOffsetLabel">⏱️ 開始からの秒数 (0.1秒単位):</span>
+          <div class="num-control">
+            <button class="step-btn" id="countOffsetMinusBtn" type="button">−</button>
+            <input type="number" id="countOffsetNumberInput" class="sec-num-input" min="0" max="300" step="0.1" value="0.0" />
+            <span style="font-size:0.78rem; color:#94a3b8;">秒</span>
+            <button class="step-btn" id="countOffsetPlusBtn" type="button">＋</button>
+          </div>
+        </div>
+
+        <div class="ctrl-row">
+          <span>🔢 長さ・回数の決め方:</span>
+          <select id="countLengthMode" class="select-input">
+            <option value="seconds">秒数で指定（〇.〇秒間）</option>
+            <option value="beats">回数で指定（ちょうど〇回鳴らす）</option>
+          </select>
+        </div>
+
+        <div class="ctrl-row" id="countDurSecRow">
+          <span>⏳ カウントを鳴らす長さ:</span>
+          <div class="num-control">
+            <button class="step-btn" id="countDurMinusBtn" type="button">−</button>
+            <input type="number" id="countDurNumberInput" class="sec-num-input" min="0" max="120" step="0.5" value="5" />
+            <span style="font-size:0.78rem; color:#94a3b8;">秒</span>
+            <button class="step-btn" id="countDurPlusBtn" type="button">＋</button>
+          </div>
+        </div>
+
+        <div class="ctrl-row" id="countBeatCountRow" style="display: none;">
+          <span>🔢 鳴らす回数（拍数）:</span>
+          <div class="num-control">
+            <button class="step-btn" id="countBeatsMinusBtn" type="button">−</button>
+            <span class="val-badge" id="countBeatsDisplay">4回</span>
+            <button class="step-btn" id="countBeatsPlusBtn" type="button">＋</button>
+          </div>
+        </div>
+
+        <div class="ctrl-row">
+          <span>🎼 テンポ（間隔）の指定方法:</span>
+          <select id="countTempoUnit" class="select-input">
+            <option value="bpm">BPM（1分間の拍数）</option>
+            <option value="interval_sec">秒間隔（〇.〇秒ごとに1回）</option>
+          </select>
+        </div>
+
+        <div id="countBpmControlBlock" style="display: flex; flex-direction: column; gap: 6px;">
+          <div class="ctrl-row">
+            <span>🥁 カウントの速さ (BPM):</span>
+            <div class="num-control">
+              <button class="step-btn" id="bpmMinusBtn" type="button">−</button>
+              <span class="val-badge" id="bpmDisplay">120 BPM</span>
+              <button class="step-btn" id="bpmPlusBtn" type="button">＋</button>
+            </div>
+          </div>
+          <div class="ctrl-row">
+            <span style="font-size: 0.76rem; color: #94a3b8; white-space: nowrap;">BPM微調整:</span>
+            <input type="range" id="bpmSlider" min="30" max="240" value="120" />
+          </div>
+        </div>
+
+        <div class="ctrl-row" id="countIntervalSecRow" style="display: none;">
+          <span>⏱️ 1回ごとの間隔（0.1秒刻み）:</span>
+          <div class="num-control">
+            <button class="step-btn" id="intervalSecMinusBtn" type="button">−</button>
+            <span class="val-badge" id="intervalSecDisplay">1.0秒おき</span>
+            <button class="step-btn" id="intervalSecPlusBtn" type="button">＋</button>
+          </div>
+        </div>
+
+        <div class="ctrl-row">
+          <span>🔔 音の種類:</span>
+          <select id="countSoundType" class="select-input">
+            <option value="beep">ピッ（クリア電子音）</option>
+            <option value="chime">ポーン（チャイム風）</option>
+            <option value="pop">ポッ（ソフト音）</option>
+            <option value="wood">コン（ウッドブロック風）</option>
+            <option value="bell">チーン（高音ベル）</option>
+            <option value="custom_audio">🎵 音声ファイルURL（声・効果音）</option>
+          </select>
+        </div>
+
+        <div id="countCustomAudioRow" style="display: none; flex-direction: column; gap: 6px;">
+          <input type="text" id="countCustomAudioUrlInput" class="text-input" placeholder="カウント用音声ファイル名（例: ./count.mp3 や Dropboxリンク）" />
+        </div>
+
+        <!-- 音の高さ（Hz）・最後の1拍変化・1音の長さ -->
+        <div id="countSynthDetailBox" class="sub-box">
+          <div class="sub-box-title count-title">🎛️ 音程（Hz）・最後の1拍（フィニッシュ音）の微調整</div>
+
+          <div class="ctrl-row">
+            <span>🎵 通常の高さ:</span>
+            <input type="range" id="countNormalFreqSlider" min="220" max="2000" step="10" value="880" />
+            <span id="countNormalFreqVal" style="width: 54px; text-align: right; color: #38bdf8; font-weight: bold;">880Hz</span>
+          </div>
+
+          <div class="ctrl-row">
+            <span>🏁 最後の1拍の高さ:</span>
+            <input type="range" id="countFinalFreqSlider" min="220" max="2600" step="10" value="1320" />
+            <span id="countFinalFreqVal" style="width: 54px; text-align: right; color: #f59e0b; font-weight: bold;">1320Hz</span>
+          </div>
+
+          <div class="ctrl-row">
+            <span>📏 1音あたりの長さ:</span>
+            <select id="countNoteLengthSelect" class="select-input">
+              <option value="short">短め（歯切れよいピッ）</option>
+              <option value="normal" selected>標準</option>
+              <option value="long">長め（余韻あり）</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="ctrl-row">
+          <span style="white-space: nowrap;">🔊 カウント音の大きさ:</span>
+          <input type="range" id="countVolumeSlider" min="0" max="100" value="70" />
+          <span id="countVolumeVal" style="width: 42px; text-align: right;">70%</span>
+        </div>
+      </div>
+
       <!-- 外部リンクURL・GitHubファイル追加＆1曲ごとの個別設定 -->
       <div class="card">
-        <div style="font-size: 0.95rem; font-weight: bold; color: #38bdf8;">🎵 曲リストの追加・曲ごとの個別設定（カウント音・長さ・音量）</div>
+        <div style="font-size: 0.95rem; font-weight: bold; color: #38bdf8;">🎵 曲リストの追加・曲ごとの個別設定（カウント詳細・長さ・音量）</div>
         <div style="font-size: 0.76rem; color: #94a3b8; line-height: 1.45;">
-          ※ 各曲のカード内で「カウント音を入れるタイミング・秒数・BPM・音の種類」を曲ごとに個別に設定できます。
+          ※ 各曲のカード内で「カウント音の開始位置（0.1秒単位）・回数/秒数・テンポ・音程・音声ファイル」まで曲ごとに完全個別設定できます。
         </div>
 
         <div class="url-input-col">
@@ -1150,76 +1311,9 @@
         <div class="song-card-list" id="settingSongListContainer" style="margin-top: 6px;"></div>
       </div>
 
-      <!-- 曲再生中に流れるカウント音の基本設定（初期値・共通設定） -->
-      <div class="card">
-        <div style="display: flex; justify-content: space-between; align-items: center;">
-          <span style="font-size: 0.95rem; font-weight: bold; color: #38bdf8;">⏱️ カウント音の基本設定（曲で「共通設定を使う」時）</span>
-          <button class="mini-btn mini-play" id="testCountSoundBtn" type="button">▶ 試聴</button>
-        </div>
-
-        <div class="ctrl-row">
-          <span>📍 カウントを入れる時期:</span>
-          <select id="countTimingMode" class="select-input">
-            <option value="end">曲が終わる直前（最後から）</option>
-            <option value="start">曲が始まってすぐ（最初から）</option>
-            <option value="custom_sec">開始から指定秒数後に鳴らす</option>
-          </select>
-        </div>
-
-        <div class="ctrl-row" id="countCustomOffsetRow" style="display: none;">
-          <span>⏱️ 開始から何秒後に鳴らすか:</span>
-          <div class="num-control">
-            <button class="step-btn" id="countOffsetMinusBtn" type="button">−</button>
-            <span class="val-badge" id="countOffsetDisplay">0秒後</span>
-            <button class="step-btn" id="countOffsetPlusBtn" type="button">＋</button>
-          </div>
-        </div>
-
-        <div class="ctrl-row">
-          <span>⏳ カウントを鳴らす長さ:</span>
-          <div class="num-control">
-            <button class="step-btn" id="countDurMinusBtn" type="button">−</button>
-            <span class="val-badge" id="countDurDisplay">5秒間</span>
-            <button class="step-btn" id="countDurPlusBtn" type="button">＋</button>
-          </div>
-        </div>
-
-        <div class="ctrl-row">
-          <span>🥁 カウントの速さ (BPM):</span>
-          <div class="num-control">
-            <button class="step-btn" id="bpmMinusBtn" type="button">−</button>
-            <span class="val-badge" id="bpmDisplay">120 BPM</span>
-            <button class="step-btn" id="bpmPlusBtn" type="button">＋</button>
-          </div>
-        </div>
-        <div class="ctrl-row" style="margin-top: -4px;">
-          <span style="font-size: 0.78rem; color: #94a3b8; white-space: nowrap;">BPMスライダー:</span>
-          <input type="range" id="bpmSlider" min="40" max="240" value="120" />
-        </div>
-
-        <div class="ctrl-row">
-          <span>🔔 音の種類:</span>
-          <select id="countSoundType" class="select-input">
-            <option value="beep">ピッ（電子音）</option>
-            <option value="chime">ポーン（チャイム風）</option>
-            <option value="pop">ポッ（ソフト音）</option>
-          </select>
-        </div>
-
-        <div class="ctrl-row">
-          <span style="white-space: nowrap;">🔊 カウント音の大きさ:</span>
-          <input type="range" id="countVolumeSlider" min="0" max="100" value="70" />
-          <span id="countVolumeVal" style="width: 42px; text-align: right;">70%</span>
-        </div>
-      </div>
-
       <!-- ワンタップ効果音パッド設定 -->
       <div class="card">
         <div style="font-size: 0.95rem; font-weight: bold; color: #fbbf24;">⚡ 効果音ボタン（歓声・キラッ）のファイル設定</div>
-        <div style="font-size: 0.75rem; color: #94a3b8; line-height: 1.45;">
-          ※ 音が鳴らない場合は、GitHubに置いた実際のファイル名（またはDropboxリンク）に合わせて書き換えてください。
-        </div>
-
         <div class="ctrl-row">
           <span style="white-space: nowrap;">🔊 効果音の大きさ:</span>
           <input type="range" id="sfxVolumeSlider" min="0" max="100" value="90" />
@@ -1325,7 +1419,7 @@
 
   <script>
     // =========================================================
-    // ★ 1. Firebaseプロジェクト設定（反映済み）
+    // ★ 1. Firebaseプロジェクト設定
     // =========================================================
     const FIREBASE_CONFIG = {
       apiKey: "AIzaSyBXIOyPImlqiPAX-4JbZ_LNZrzT9_SIazc",
@@ -1338,14 +1432,8 @@
       measurementId: "G-6SXYHSS0H8"
     };
 
-    // =========================================================
-    // ★ 2. 顔認証AIモデル配信元（vladmandic/face-api 公式CDN）
-    // =========================================================
     const FACE_MODEL_URL = "https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7.13/model";
 
-    // =========================================================
-    // ★ 3. ワンタップ効果音ボタン（歓声とキラッの2つのみ）
-    // =========================================================
     const DEFAULT_SFX_BUTTONS = [
       { emoji: "🎉", label: "歓声", file: "./歓声と拍手1.mp3" },
       { emoji: "✨", label: "キラッ", file: "./キラッ1.mp3" }
@@ -1381,9 +1469,17 @@
         duration: 15,
         countMode: "end",
         countOffsetSec: 0,
+        countLengthMode: "seconds",
         countDurationSec: 5,
+        countBeatCount: 4,
+        countTempoUnit: "bpm",
         countBpm: 120,
+        countIntervalSec: 1.0,
         countSoundType: "beep",
+        countCustomAudioUrl: "",
+        countNormalFreq: 880,
+        countFinalFreq: 1320,
+        countNoteLength: "normal",
         countVolume: 70
       },
       {
@@ -1398,16 +1494,23 @@
         duration: 5,
         countMode: "off",
         countOffsetSec: 0,
+        countLengthMode: "seconds",
         countDurationSec: 3,
+        countBeatCount: 3,
+        countTempoUnit: "bpm",
         countBpm: 120,
+        countIntervalSec: 1.0,
         countSoundType: "beep",
+        countCustomAudioUrl: "",
+        countNormalFreq: 880,
+        countFinalFreq: 1320,
+        countNoteLength: "normal",
         countVolume: 70
       }
     ];
 
     const DURATION_STEPS = [0, 3, 5, 10, 15, 20, 30, 45, 60, 90, 120];
     const FADE_STEPS = [0, 0.5, 1, 1.5, 2, 3, 4, 5, 7, 10];
-    const COUNT_DURATION_STEPS = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 15, 20, 30];
 
     // DOM参照
     const menuToggleBtn = document.getElementById("menuToggleBtn");
@@ -1502,20 +1605,48 @@
     const sfxVolumeSlider = document.getElementById("sfxVolumeSlider");
     const sfxVolumeVal = document.getElementById("sfxVolumeVal");
 
+    // 詳細カウント音設定DOM
+    const countPresetChips = document.querySelectorAll(".preset-chip");
     const countTimingMode = document.getElementById("countTimingMode");
     const countCustomOffsetRow = document.getElementById("countCustomOffsetRow");
+    const countOffsetLabel = document.getElementById("countOffsetLabel");
     const countOffsetMinusBtn = document.getElementById("countOffsetMinusBtn");
     const countOffsetPlusBtn = document.getElementById("countOffsetPlusBtn");
-    const countOffsetDisplay = document.getElementById("countOffsetDisplay");
+    const countOffsetNumberInput = document.getElementById("countOffsetNumberInput");
 
+    const countLengthMode = document.getElementById("countLengthMode");
+    const countDurSecRow = document.getElementById("countDurSecRow");
     const countDurMinusBtn = document.getElementById("countDurMinusBtn");
     const countDurPlusBtn = document.getElementById("countDurPlusBtn");
-    const countDurDisplay = document.getElementById("countDurDisplay");
+    const countDurNumberInput = document.getElementById("countDurNumberInput");
+
+    const countBeatCountRow = document.getElementById("countBeatCountRow");
+    const countBeatsMinusBtn = document.getElementById("countBeatsMinusBtn");
+    const countBeatsPlusBtn = document.getElementById("countBeatsPlusBtn");
+    const countBeatsDisplay = document.getElementById("countBeatsDisplay");
+
+    const countTempoUnit = document.getElementById("countTempoUnit");
+    const countBpmControlBlock = document.getElementById("countBpmControlBlock");
     const bpmMinusBtn = document.getElementById("bpmMinusBtn");
     const bpmPlusBtn = document.getElementById("bpmPlusBtn");
     const bpmDisplay = document.getElementById("bpmDisplay");
     const bpmSlider = document.getElementById("bpmSlider");
+
+    const countIntervalSecRow = document.getElementById("countIntervalSecRow");
+    const intervalSecMinusBtn = document.getElementById("intervalSecMinusBtn");
+    const intervalSecPlusBtn = document.getElementById("intervalSecPlusBtn");
+    const intervalSecDisplay = document.getElementById("intervalSecDisplay");
+
     const countSoundType = document.getElementById("countSoundType");
+    const countCustomAudioRow = document.getElementById("countCustomAudioRow");
+    const countCustomAudioUrlInput = document.getElementById("countCustomAudioUrlInput");
+    const countSynthDetailBox = document.getElementById("countSynthDetailBox");
+    const countNormalFreqSlider = document.getElementById("countNormalFreqSlider");
+    const countNormalFreqVal = document.getElementById("countNormalFreqVal");
+    const countFinalFreqSlider = document.getElementById("countFinalFreqSlider");
+    const countFinalFreqVal = document.getElementById("countFinalFreqVal");
+    const countNoteLengthSelect = document.getElementById("countNoteLengthSelect");
+
     const countVolumeSlider = document.getElementById("countVolumeSlider");
     const countVolumeVal = document.getElementById("countVolumeVal");
     const testCountSoundBtn = document.getElementById("testCountSoundBtn");
@@ -1551,11 +1682,10 @@
     let syncGroupId = localStorage.getItem("person_sound_sync_group_v1") || "default_room";
     syncGroupIdInput.value = syncGroupId;
 
-    // 効果音ボタンリスト（常に2つのみ）
     localStorage.removeItem("person_sound_sfx_v1");
     let sfxButtons = enforceTwoSfxButtons(JSON.parse(localStorage.getItem("person_sound_sfx_two_only") || "null"));
 
-    // 服装・荷物記憶データ（入室時に自動保存・帰宅時に照合）
+    // 服装・荷物記憶データ
     let savedOutfitConfig = JSON.parse(localStorage.getItem("person_sound_outfit_cfg_v1") || "null") || {
       enabled: true,
       similarityThreshold: 0.62
@@ -1601,32 +1731,34 @@
       exitAction: "random"
     };
 
-    // 人物の左右移動追跡用
+    // 人物追跡用
     let trackStartX = null;
     let trackLastX = null;
     let trackLastSeenTime = 0;
     let trackTriggeredThisPass = false;
     let trackVerifiedNameThisPass = null;
-    let trackPeakOutfitSample = null; // 通過中に一番大きく鮮明に映ったときの服装・荷物特徴
+    let trackPeakOutfitSample = null;
 
     let sfxMasterVolume = savedOpsConfig.sfxMasterVolume;
     let activeSfxAudios = [];
 
-    // カウント音基本設定
-    let savedCountConfig = JSON.parse(localStorage.getItem("person_sound_count_cfg_v1") || "null") || {
+    // ★ 詳細カウント音基本設定
+    let savedCountConfig = JSON.parse(localStorage.getItem("person_sound_count_cfg_v2") || "null") || {
       timingMode: "end",
       offsetSec: 0,
-      durIndex: 5,
+      lengthMode: "seconds",
+      durationSec: 5,
+      beatCount: 4,
+      tempoUnit: "bpm",
       bpm: 120,
+      intervalSec: 1.0,
       soundMode: "beep",
+      customAudioUrl: "",
+      normalFreq: 880,
+      finalFreq: 1320,
+      noteLength: "normal",
       volume: 0.7
     };
-
-    let countDurIndex = savedCountConfig.durIndex;
-    let countSoundDurationSec = COUNT_DURATION_STEPS[countDurIndex] ?? 5;
-    let countBpm = savedCountConfig.bpm;
-    let countSoundMode = savedCountConfig.soundMode;
-    let countSoundVol = savedCountConfig.volume;
 
     let stopTimerId = null;
     let countStartTimerId = null;
@@ -1636,7 +1768,7 @@
     let currentPlayingIndex = -1;
 
     // ==========================================
-    // ★ 服装・荷物（シルエット・色分布）抽出＆比較エンジン
+    // 服装・荷物（シルエット・色分布）抽出＆比較エンジン
     // ==========================================
     const outfitSampleCanvas = document.createElement("canvas");
     outfitSampleCanvas.width = 24;
@@ -1648,7 +1780,6 @@
         const [bx, by, bw, bh] = bbox;
         if (bw < 24 || bh < 36) return null;
 
-        // 上半身〜下半身・荷物が収まる領域（左右少し余裕を持たせてリュックや手荷物も含める）
         const padX = bw * 0.08;
         const sx = Math.max(0, bx - padX);
         const sy = Math.max(0, by + bh * 0.08);
@@ -1659,7 +1790,6 @@
         outfitSampleCtx.drawImage(videoEl, sx, sy, sw, sh, 0, 0, 24, 36);
         const imgData = outfitSampleCtx.getImageData(0, 0, 24, 36).data;
 
-        // 上半身(y:0..17) と 下半身+荷物(y:18..35) の平均RGB＆カラーヒストグラム(3x3x3=27ビン)
         const histTop = new Array(27).fill(0);
         const histBot = new Array(27).fill(0);
         let topR = 0, topG = 0, topB = 0, topCount = 0;
@@ -1692,11 +1822,9 @@
         const topHex = `#${[topR, topG, topB].map(c => Math.round(c / Math.max(1, topCount)).toString(16).padStart(2, "0")).join("")}`;
         const botHex = `#${[botR, botG, botB].map(c => Math.round(c / Math.max(1, botCount)).toString(16).padStart(2, "0")).join("")}`;
 
-        // 縦横比（リュック・大きい荷物があると横幅比率が増える）と画面内の相対サイズ
         const aspectRatio = +(bw / Math.max(1, bh)).toFixed(3);
         const relHeight = +(bh / Math.max(1, vh)).toFixed(3);
 
-        // サムネイル生成（軽量JPEG）
         const thumbCvs = document.createElement("canvas");
         thumbCvs.width = 56;
         thumbCvs.height = 72;
@@ -1721,7 +1849,6 @@
     function computeOutfitSimilarity(sigA, sigB) {
       if (!sigA || !sigB || !Array.isArray(sigA.histTop) || !Array.isArray(sigB.histTop)) return 0;
 
-      // ヒストグラム交差法（Bhattacharyya係数）で色分布の一致度を計算
       let bhatTop = 0;
       let bhatBot = 0;
       for (let i = 0; i < 27; i++) {
@@ -1729,14 +1856,12 @@
         bhatBot += Math.sqrt((sigA.histBot[i] || 0) * (sigB.histBot[i] || 0));
       }
 
-      // シルエット（荷物を含めた縦横比と身長比率）の一致度
       const arDiff = Math.abs((sigA.aspectRatio || 0.45) - (sigB.aspectRatio || 0.45));
       const arScore = Math.max(0, 1 - arDiff * 2.2);
 
       const hDiff = Math.abs((sigA.relHeight || 0.6) - (sigB.relHeight || 0.6));
       const hScore = Math.max(0, 1 - hDiff * 1.8);
 
-      // 総合一致率（上半身40% + 下半身・荷物35% + シルエット・荷物幅15% + 背丈10%）
       const totalScore = bhatTop * 0.40 + bhatBot * 0.35 + arScore * 0.15 + hScore * 0.10;
       return Math.max(0, Math.min(1, totalScore));
     }
@@ -1769,7 +1894,6 @@
       const timeStr = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
       const bagLabel = signature.aspectRatio >= 0.48 ? "荷物・リュックあり体型" : "標準シルエット";
 
-      // 同じ人の古い記憶があれば最新に更新、最大8件まで保持
       const existingIdx = activeEntryOutfits.findIndex(o => o.label === personLabel && personLabel !== "入室者");
       const entryObj = {
         id: `outfit_${Date.now()}`,
@@ -1915,11 +2039,19 @@
         fadeIn: typeof s.fadeIn === "number" ? s.fadeIn : 1,
         fadeOut: typeof s.fadeOut === "number" ? s.fadeOut : 2,
         duration: typeof s.duration === "number" ? s.duration : 15,
-        countMode: ["global", "end", "start", "custom_sec", "off"].includes(s.countMode) ? s.countMode : "global",
+        countMode: ["global", "end", "start", "custom_sec", "before_end_sec", "off"].includes(s.countMode) ? s.countMode : "global",
         countOffsetSec: typeof s.countOffsetSec === "number" ? s.countOffsetSec : 0,
+        countLengthMode: ["seconds", "beats"].includes(s.countLengthMode) ? s.countLengthMode : "seconds",
         countDurationSec: typeof s.countDurationSec === "number" ? s.countDurationSec : 5,
+        countBeatCount: typeof s.countBeatCount === "number" ? s.countBeatCount : 4,
+        countTempoUnit: ["bpm", "interval_sec"].includes(s.countTempoUnit) ? s.countTempoUnit : "bpm",
         countBpm: typeof s.countBpm === "number" ? s.countBpm : 120,
-        countSoundType: ["beep", "chime", "pop"].includes(s.countSoundType) ? s.countSoundType : "beep",
+        countIntervalSec: typeof s.countIntervalSec === "number" ? s.countIntervalSec : 1.0,
+        countSoundType: ["beep", "chime", "pop", "wood", "bell", "custom_audio"].includes(s.countSoundType) ? s.countSoundType : "beep",
+        countCustomAudioUrl: typeof s.countCustomAudioUrl === "string" ? s.countCustomAudioUrl : "",
+        countNormalFreq: typeof s.countNormalFreq === "number" ? s.countNormalFreq : 880,
+        countFinalFreq: typeof s.countFinalFreq === "number" ? s.countFinalFreq : 1320,
+        countNoteLength: ["short", "normal", "long"].includes(s.countNoteLength) ? s.countNoteLength : "normal",
         countVolume: typeof s.countVolume === "number" ? s.countVolume : 70
       };
     }
@@ -1933,7 +2065,7 @@
     audioPlayer.preload = "auto";
 
     // ==========================================
-    // ★ Firebase Firestore クラウド自動同期エンジン
+    // Firebase Firestore クラウド自動同期エンジン
     // ==========================================
     function setSyncBadge(text, colorHex) {
       cloudSyncStatusText.textContent = text;
@@ -1951,7 +2083,7 @@
       localStorage.setItem("person_sound_active_outfits_v1", JSON.stringify(activeEntryOutfits));
       localStorage.setItem("person_sound_walk_cfg_v1", JSON.stringify(savedWalkConfig));
       localStorage.setItem("person_sound_dir_modes_v1", JSON.stringify(savedDirectionModes));
-      localStorage.setItem("person_sound_count_cfg_v1", JSON.stringify(savedCountConfig));
+      localStorage.setItem("person_sound_count_cfg_v2", JSON.stringify(savedCountConfig));
       localStorage.setItem("person_sound_sfx_two_only", JSON.stringify(sfxButtons));
       localStorage.setItem("person_sound_ops_cfg_v1", JSON.stringify(savedOpsConfig));
     }
@@ -2017,11 +2149,6 @@
         }
         if (data.savedCountConfig) {
           savedCountConfig = { ...savedCountConfig, ...data.savedCountConfig };
-          countDurIndex = savedCountConfig.durIndex ?? 5;
-          countSoundDurationSec = COUNT_DURATION_STEPS[countDurIndex] ?? 5;
-          countBpm = savedCountConfig.bpm ?? 120;
-          countSoundMode = savedCountConfig.soundMode || "beep";
-          countSoundVol = typeof savedCountConfig.volume === "number" ? savedCountConfig.volume : 0.7;
         }
         if (Array.isArray(data.sfxButtons)) {
           if (data.sfxButtons.length > 2) {
@@ -2139,30 +2266,84 @@
     });
 
     // ==========================================
-    // カウント音タイミング・基本設定の保存とUI同期
+    // ★ カウント音の詳細設定UI同期と保存
     // ==========================================
     function saveCountConfig() {
-      savedCountConfig.timingMode = countTimingMode.value;
-      savedCountConfig.durIndex = countDurIndex;
-      savedCountConfig.bpm = countBpm;
-      savedCountConfig.soundMode = countSoundMode;
-      savedCountConfig.volume = countSoundVol;
       scheduleCloudPush();
       renderAllSongLists();
     }
 
     function syncCountConfigUI() {
-      countTimingMode.value = savedCountConfig.timingMode || "end";
-      countCustomOffsetRow.style.display = countTimingMode.value === "custom_sec" ? "flex" : "none";
-      countOffsetDisplay.textContent = `${savedCountConfig.offsetSec || 0}秒後`;
-      countDurDisplay.textContent = countSoundDurationSec === 0 ? "OFF（0秒）" : `${countSoundDurationSec}秒間`;
-      bpmDisplay.textContent = `${countBpm} BPM`;
-      bpmSlider.value = String(countBpm);
-      countSoundType.value = countSoundMode;
-      const volPct = Math.round(countSoundVol * 100);
+      const cfg = savedCountConfig;
+      countTimingMode.value = cfg.timingMode || "end";
+
+      const showOffset = cfg.timingMode === "custom_sec" || cfg.timingMode === "before_end_sec";
+      countCustomOffsetRow.style.display = showOffset ? "flex" : "none";
+      countOffsetLabel.textContent = cfg.timingMode === "before_end_sec"
+        ? "⏱️ 終了何秒前に終わるか:"
+        : "⏱️ 開始からの秒数 (0.1秒刻み):";
+      countOffsetNumberInput.value = (cfg.offsetSec ?? 0).toFixed(1);
+
+      countLengthMode.value = cfg.lengthMode || "seconds";
+      countDurSecRow.style.display = cfg.lengthMode === "seconds" ? "flex" : "none";
+      countBeatCountRow.style.display = cfg.lengthMode === "beats" ? "flex" : "none";
+      countDurNumberInput.value = String(cfg.durationSec ?? 5);
+      countBeatsDisplay.textContent = `${cfg.beatCount ?? 4}回`;
+
+      countTempoUnit.value = cfg.tempoUnit || "bpm";
+      countBpmControlBlock.style.display = cfg.tempoUnit === "bpm" ? "flex" : "none";
+      countIntervalSecRow.style.display = cfg.tempoUnit === "interval_sec" ? "flex" : "none";
+
+      bpmDisplay.textContent = `${cfg.bpm ?? 120} BPM`;
+      bpmSlider.value = String(cfg.bpm ?? 120);
+      intervalSecDisplay.textContent = `${(cfg.intervalSec ?? 1.0).toFixed(1)}秒おき`;
+
+      countSoundType.value = cfg.soundMode || "beep";
+      const isCustomAudio = cfg.soundMode === "custom_audio";
+      countCustomAudioRow.style.display = isCustomAudio ? "flex" : "none";
+      countSynthDetailBox.style.display = isCustomAudio ? "none" : "flex";
+      countCustomAudioUrlInput.value = cfg.customAudioUrl || "";
+
+      countNormalFreqSlider.value = String(cfg.normalFreq ?? 880);
+      countNormalFreqVal.textContent = `${cfg.normalFreq ?? 880}Hz`;
+      countFinalFreqSlider.value = String(cfg.finalFreq ?? 1320);
+      countFinalFreqVal.textContent = `${cfg.finalFreq ?? 1320}Hz`;
+      countNoteLengthSelect.value = cfg.noteLength || "normal";
+
+      const volPct = Math.round((cfg.volume ?? 0.7) * 100);
       countVolumeSlider.value = String(volPct);
       countVolumeVal.textContent = `${volPct}%`;
     }
+
+    countPresetChips.forEach(chip => {
+      chip.addEventListener("click", () => {
+        const p = chip.dataset.cntPreset;
+        if (p === "last3") {
+          Object.assign(savedCountConfig, {
+            timingMode: "end", lengthMode: "beats", beatCount: 3, tempoUnit: "interval_sec", intervalSec: 1.0,
+            soundMode: "beep", normalFreq: 880, finalFreq: 1320, noteLength: "normal"
+          });
+        } else if (p === "last5_fast") {
+          Object.assign(savedCountConfig, {
+            timingMode: "end", lengthMode: "seconds", durationSec: 5, tempoUnit: "bpm", bpm: 150,
+            soundMode: "beep", normalFreq: 980, finalFreq: 1560, noteLength: "short"
+          });
+        } else if (p === "intro4") {
+          Object.assign(savedCountConfig, {
+            timingMode: "start", lengthMode: "beats", beatCount: 4, tempoUnit: "bpm", bpm: 120,
+            soundMode: "pop", normalFreq: 520, finalFreq: 1040, noteLength: "normal"
+          });
+        } else if (p === "chime3") {
+          Object.assign(savedCountConfig, {
+            timingMode: "end", lengthMode: "beats", beatCount: 3, tempoUnit: "interval_sec", intervalSec: 1.0,
+            soundMode: "chime", normalFreq: 780, finalFreq: 1050, noteLength: "long"
+          });
+        }
+        syncCountConfigUI();
+        saveCountConfig();
+        previewCountParams(getEffectiveCountParams(null));
+      });
+    });
 
     countTimingMode.addEventListener("change", () => {
       savedCountConfig.timingMode = countTimingMode.value;
@@ -2171,14 +2352,124 @@
     });
 
     countOffsetMinusBtn.addEventListener("click", () => {
-      savedCountConfig.offsetSec = Math.max(0, (savedCountConfig.offsetSec || 0) - 1);
+      savedCountConfig.offsetSec = Math.max(0, +((savedCountConfig.offsetSec || 0) - 0.5).toFixed(1));
       syncCountConfigUI();
       saveCountConfig();
     });
 
     countOffsetPlusBtn.addEventListener("click", () => {
-      savedCountConfig.offsetSec = Math.min(300, (savedCountConfig.offsetSec || 0) + 1);
+      savedCountConfig.offsetSec = Math.min(300, +((savedCountConfig.offsetSec || 0) + 0.5).toFixed(1));
       syncCountConfigUI();
+      saveCountConfig();
+    });
+
+    countOffsetNumberInput.addEventListener("change", () => {
+      const v = Math.max(0, Math.min(300, parseFloat(countOffsetNumberInput.value) || 0));
+      savedCountConfig.offsetSec = +v.toFixed(1);
+      syncCountConfigUI();
+      saveCountConfig();
+    });
+
+    countLengthMode.addEventListener("change", () => {
+      savedCountConfig.lengthMode = countLengthMode.value;
+      syncCountConfigUI();
+      saveCountConfig();
+    });
+
+    countDurMinusBtn.addEventListener("click", () => {
+      savedCountConfig.durationSec = Math.max(0, +((savedCountConfig.durationSec ?? 5) - 0.5).toFixed(1));
+      syncCountConfigUI();
+      saveCountConfig();
+    });
+
+    countDurPlusBtn.addEventListener("click", () => {
+      savedCountConfig.durationSec = Math.min(120, +((savedCountConfig.durationSec ?? 5) + 0.5).toFixed(1));
+      syncCountConfigUI();
+      saveCountConfig();
+    });
+
+    countDurNumberInput.addEventListener("change", () => {
+      const v = Math.max(0, Math.min(120, parseFloat(countDurNumberInput.value) || 0));
+      savedCountConfig.durationSec = +v.toFixed(1);
+      syncCountConfigUI();
+      saveCountConfig();
+    });
+
+    countBeatsMinusBtn.addEventListener("click", () => {
+      savedCountConfig.beatCount = Math.max(1, (savedCountConfig.beatCount ?? 4) - 1);
+      syncCountConfigUI();
+      saveCountConfig();
+    });
+
+    countBeatsPlusBtn.addEventListener("click", () => {
+      savedCountConfig.beatCount = Math.min(60, (savedCountConfig.beatCount ?? 4) + 1);
+      syncCountConfigUI();
+      saveCountConfig();
+    });
+
+    countTempoUnit.addEventListener("change", () => {
+      savedCountConfig.tempoUnit = countTempoUnit.value;
+      syncCountConfigUI();
+      saveCountConfig();
+    });
+
+    function setBpmValue(newBpm) {
+      savedCountConfig.bpm = Math.max(30, Math.min(240, newBpm));
+      syncCountConfigUI();
+      saveCountConfig();
+    }
+
+    bpmMinusBtn.addEventListener("click", () => setBpmValue((savedCountConfig.bpm ?? 120) - 1));
+    bpmPlusBtn.addEventListener("click", () => setBpmValue((savedCountConfig.bpm ?? 120) + 1));
+    bpmSlider.addEventListener("input", (e) => setBpmValue(parseInt(e.target.value, 10)));
+
+    intervalSecMinusBtn.addEventListener("click", () => {
+      savedCountConfig.intervalSec = Math.max(0.2, +((savedCountConfig.intervalSec ?? 1.0) - 0.1).toFixed(1));
+      syncCountConfigUI();
+      saveCountConfig();
+    });
+
+    intervalSecPlusBtn.addEventListener("click", () => {
+      savedCountConfig.intervalSec = Math.min(10.0, +((savedCountConfig.intervalSec ?? 1.0) + 0.1).toFixed(1));
+      syncCountConfigUI();
+      saveCountConfig();
+    });
+
+    countSoundType.addEventListener("change", (e) => {
+      savedCountConfig.soundMode = e.target.value;
+      syncCountConfigUI();
+      saveCountConfig();
+      playSingleCountBeep(false, getEffectiveCountParams(null));
+    });
+
+    countCustomAudioUrlInput.addEventListener("change", () => {
+      savedCountConfig.customAudioUrl = normalizeAudioPath(countCustomAudioUrlInput.value);
+      syncCountConfigUI();
+      saveCountConfig();
+    });
+
+    countNormalFreqSlider.addEventListener("input", (e) => {
+      savedCountConfig.normalFreq = parseInt(e.target.value, 10);
+      countNormalFreqVal.textContent = `${savedCountConfig.normalFreq}Hz`;
+      saveCountConfig();
+    });
+
+    countFinalFreqSlider.addEventListener("input", (e) => {
+      savedCountConfig.finalFreq = parseInt(e.target.value, 10);
+      countFinalFreqVal.textContent = `${savedCountConfig.finalFreq}Hz`;
+      saveCountConfig();
+    });
+
+    countNoteLengthSelect.addEventListener("change", () => {
+      savedCountConfig.noteLength = countNoteLengthSelect.value;
+      saveCountConfig();
+      playSingleCountBeep(false, getEffectiveCountParams(null));
+    });
+
+    countVolumeSlider.addEventListener("input", (e) => {
+      const val = parseInt(e.target.value, 10);
+      savedCountConfig.volume = val / 100;
+      countVolumeVal.textContent = `${val}%`;
       saveCountConfig();
     });
 
@@ -2493,7 +2784,7 @@
     });
 
     // ==========================================
-    // ワンタップ効果音パッド描画（歓声・キラッの2つのみ）
+    // ワンタップ効果音パッド描画
     // ==========================================
     function saveSfxConfig() {
       sfxButtons = enforceTwoSfxButtons(sfxButtons);
@@ -2631,7 +2922,7 @@
     });
 
     // ==========================================
-    // 入室・退出それぞれの曲アクション実行（服装・荷物記憶連携）
+    // 入室・退出それぞれの曲アクション実行
     // ==========================================
     function executeActionByCode(actionCode, isTest = false, prefixLabel = "") {
       if (actionCode === "none") {
@@ -2662,7 +2953,6 @@
           return;
         }
 
-        // 入室時の服装・荷物を記憶する
         if (outfitSample) {
           rememberEntryOutfit(authPersonName || "入室者", outfitSample);
         }
@@ -2686,7 +2976,6 @@
           return;
         }
 
-        // 退出時は人数カウントに関係なく毎回鳴らす（または設定に応じて）
         if (exitImmediateToggle.checked) {
           executeActionByCode(exitSoundSelect.value, false, `⬅ ${nameTag}帰宅・退出: `);
         } else {
@@ -2844,7 +3133,7 @@
     });
 
     // ==========================================
-    // カウント音用 Web Audio API（曲ごとの個別設定対応）
+    // ★ 高精度カウント音エンジン（Web Audio API ＋ 自作音声ファイル対応）
     // ==========================================
     let audioCtx = null;
     function ensureAudioContext() {
@@ -2859,32 +3148,100 @@
 
     function getEffectiveCountParams(song) {
       if (!song || !song.countMode || song.countMode === "global") {
+        const c = savedCountConfig;
         return {
-          mode: savedCountConfig.timingMode || "end",
-          offsetSec: savedCountConfig.offsetSec || 0,
-          durationSec: countSoundDurationSec,
-          bpm: countBpm,
-          soundMode: countSoundMode,
-          volume: countSoundVol
+          mode: c.timingMode || "end",
+          offsetSec: c.offsetSec ?? 0,
+          lengthMode: c.lengthMode || "seconds",
+          durationSec: c.durationSec ?? 5,
+          beatCount: c.beatCount ?? 4,
+          tempoUnit: c.tempoUnit || "bpm",
+          bpm: c.bpm ?? 120,
+          intervalSec: c.intervalSec ?? 1.0,
+          soundMode: c.soundMode || "beep",
+          customAudioUrl: c.customAudioUrl || "",
+          normalFreq: c.normalFreq ?? 880,
+          finalFreq: c.finalFreq ?? 1320,
+          noteLength: c.noteLength || "normal",
+          volume: c.volume ?? 0.7
         };
       }
       return {
         mode: song.countMode,
-        offsetSec: song.countOffsetSec || 0,
-        durationSec: typeof song.countDurationSec === "number" ? song.countDurationSec : 5,
-        bpm: typeof song.countBpm === "number" ? song.countBpm : 120,
+        offsetSec: song.countOffsetSec ?? 0,
+        lengthMode: song.countLengthMode || "seconds",
+        durationSec: song.countDurationSec ?? 5,
+        beatCount: song.countBeatCount ?? 4,
+        tempoUnit: song.countTempoUnit || "bpm",
+        bpm: song.countBpm ?? 120,
+        intervalSec: song.countIntervalSec ?? 1.0,
         soundMode: song.countSoundType || "beep",
+        customAudioUrl: song.countCustomAudioUrl || "",
+        normalFreq: song.countNormalFreq ?? 880,
+        finalFreq: song.countFinalFreq ?? 1320,
+        noteLength: song.countNoteLength || "normal",
         volume: (typeof song.countVolume === "number" ? song.countVolume : 70) / 100
       };
     }
 
-    function playSingleCountBeep(isFinal = false, overrideParams = null) {
-      const durSec = overrideParams ? overrideParams.durationSec : countSoundDurationSec;
-      const vol = overrideParams ? overrideParams.volume : countSoundVol;
-      const bpm = overrideParams ? overrideParams.bpm : countBpm;
-      const sMode = overrideParams ? overrideParams.soundMode : countSoundMode;
+    function computeCountSchedule(songDurationSec, params) {
+      const beatIntervalSec = params.tempoUnit === "interval_sec"
+        ? Math.max(0.2, params.intervalSec || 1.0)
+        : (60 / Math.max(30, params.bpm || 120));
 
-      if (durSec <= 0 || vol <= 0) return;
+      let totalBeats = 1;
+      let totalSpanSec = 0;
+
+      if (params.lengthMode === "beats") {
+        totalBeats = Math.max(1, Math.round(params.beatCount || 4));
+        totalSpanSec = (totalBeats - 1) * beatIntervalSec + 0.35;
+      } else {
+        const dur = Math.max(0, params.durationSec ?? 5);
+        if (dur <= 0) return { totalBeats: 0, delayMs: 0, beatIntervalMs: beatIntervalSec * 1000 };
+        totalBeats = Math.max(1, Math.round(dur / beatIntervalSec));
+        totalSpanSec = dur;
+      }
+
+      let delaySec = 0;
+      if (params.mode === "start") {
+        delaySec = 0;
+      } else if (params.mode === "custom_sec") {
+        delaySec = Math.max(0, params.offsetSec || 0);
+      } else if (params.mode === "before_end_sec") {
+        const marginBeforeEnd = Math.max(0, params.offsetSec || 0);
+        if (songDurationSec > 0) {
+          delaySec = Math.max(0, songDurationSec - marginBeforeEnd - totalSpanSec);
+        }
+      } else {
+        // "end"（曲が終わる直前）
+        if (songDurationSec > 0) {
+          delaySec = Math.max(0, songDurationSec - totalSpanSec);
+        }
+      }
+
+      return {
+        totalBeats,
+        delayMs: delaySec * 1000,
+        beatIntervalMs: beatIntervalSec * 1000
+      };
+    }
+
+    function playSingleCountBeep(isFinal = false, overrideParams = null) {
+      const params = overrideParams || getEffectiveCountParams(null);
+      const vol = params.volume;
+      if (vol <= 0) return;
+
+      // 自作音声ファイルモードの場合
+      if (params.soundMode === "custom_audio" && params.customAudioUrl) {
+        try {
+          const url = resolveSafeAudioUrl(params.customAudioUrl);
+          const a = new Audio(url);
+          a.volume = Math.max(0, Math.min(1, vol));
+          a.play().catch(() => {});
+        } catch (e) {}
+        return;
+      }
+
       ensureAudioContext();
       if (!audioCtx) return;
 
@@ -2894,33 +3251,53 @@
       osc.connect(gain);
       gain.connect(audioCtx.destination);
 
-      const peakGain = vol * 0.55;
-      const beatSec = 60 / bpm;
-      const maxDur = Math.min(0.35, beatSec * 0.75);
-      const dur = isFinal ? Math.max(0.22, maxDur) : Math.min(0.14, beatSec * 0.55);
+      const peakGain = vol * 0.65;
+      const normalHz = params.normalFreq || 880;
+      const finalHz = params.finalFreq || 1320;
+      const targetHz = isFinal ? finalHz : normalHz;
 
+      const lenMul = params.noteLength === "short" ? 0.55 : (params.noteLength === "long" ? 1.7 : 1.0);
+      const baseDur = isFinal ? 0.24 : 0.13;
+      const dur = Math.max(0.05, Math.min(0.8, baseDur * lenMul));
+
+      const sMode = params.soundMode;
       if (sMode === "beep") {
         osc.type = "sine";
-        osc.frequency.setValueAtTime(isFinal ? 1318.5 : 880, now);
+        osc.frequency.setValueAtTime(targetHz, now);
         gain.gain.setValueAtTime(peakGain, now);
         gain.gain.exponentialRampToValueAtTime(0.001, now + dur);
         osc.start(now);
         osc.stop(now + dur + 0.02);
       } else if (sMode === "chime") {
         osc.type = "triangle";
-        osc.frequency.setValueAtTime(isFinal ? 1046.5 : 784.0, now);
+        osc.frequency.setValueAtTime(targetHz, now);
         gain.gain.setValueAtTime(peakGain, now);
-        gain.gain.exponentialRampToValueAtTime(0.001, now + (isFinal ? Math.max(0.3, maxDur) : Math.min(0.24, beatSec * 0.7)));
+        gain.gain.exponentialRampToValueAtTime(0.001, now + dur * 1.45);
         osc.start(now);
-        osc.stop(now + (isFinal ? Math.max(0.32, maxDur + 0.02) : Math.min(0.26, beatSec * 0.72)));
+        osc.stop(now + dur * 1.45 + 0.02);
       } else if (sMode === "pop") {
         osc.type = "sine";
-        osc.frequency.setValueAtTime(isFinal ? 660 : 440, now);
-        osc.frequency.exponentialRampToValueAtTime(isFinal ? 1320 : 880, now + Math.min(0.1, dur));
+        osc.frequency.setValueAtTime(targetHz * 0.65, now);
+        osc.frequency.exponentialRampToValueAtTime(targetHz * 1.2, now + Math.min(0.09, dur));
         gain.gain.setValueAtTime(peakGain, now);
         gain.gain.exponentialRampToValueAtTime(0.001, now + dur);
         osc.start(now);
         osc.stop(now + dur + 0.02);
+      } else if (sMode === "wood") {
+        osc.type = "triangle";
+        osc.frequency.setValueAtTime(targetHz * 0.9, now);
+        osc.frequency.exponentialRampToValueAtTime(targetHz * 0.45, now + Math.min(0.08, dur));
+        gain.gain.setValueAtTime(peakGain * 1.15, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + Math.min(0.12, dur));
+        osc.start(now);
+        osc.stop(now + Math.min(0.14, dur + 0.02));
+      } else if (sMode === "bell") {
+        osc.type = "sine";
+        osc.frequency.setValueAtTime(targetHz * 1.5, now);
+        gain.gain.setValueAtTime(peakGain * 0.85, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + dur * 1.8);
+        osc.start(now);
+        osc.stop(now + dur * 1.8 + 0.02);
       }
     }
 
@@ -2938,57 +3315,43 @@
     function schedulePlaybackCountSound(songDurationSec, song) {
       clearCountSoundTimers();
       const params = getEffectiveCountParams(song);
-      if (params.mode === "off" || params.durationSec <= 0 || params.volume <= 0) return;
+      if (params.mode === "off" || params.volume <= 0) return;
 
-      let delayMs = 0;
-      let activeWindowSec = params.durationSec;
+      const sched = computeCountSchedule(songDurationSec, params);
+      if (sched.totalBeats <= 0) return;
 
-      if (params.mode === "start") {
-        delayMs = 0;
-        if (songDurationSec > 0 && songDurationSec < params.durationSec) {
-          activeWindowSec = songDurationSec;
-        }
-      } else if (params.mode === "custom_sec") {
-        delayMs = params.offsetSec * 1000;
-        if (songDurationSec > 0) {
-          if (params.offsetSec >= songDurationSec) return;
-          activeWindowSec = Math.min(params.durationSec, songDurationSec - params.offsetSec);
-        }
-      } else {
-        if (songDurationSec > 0) {
-          if (songDurationSec > params.durationSec) {
-            delayMs = (songDurationSec - params.durationSec) * 1000;
-          } else {
-            activeWindowSec = songDurationSec;
-          }
-        }
+      // 音声ファイル単発再生（回数指定なし or custom_audioで1ファイル再生したい場合）
+      if (params.soundMode === "custom_audio" && params.customAudioUrl && params.lengthMode === "seconds") {
+        countStartTimerId = setTimeout(() => {
+          playSingleCountBeep(true, params);
+          systemStatus.textContent = `🥁 カウント音声再生中: ${song.title}`;
+          systemStatus.style.color = "#f59e0b";
+        }, sched.delayMs);
+        return;
       }
-
-      const beatIntervalMs = (60 / params.bpm) * 1000;
-      const totalBeats = Math.max(1, Math.round(activeWindowSec * (params.bpm / 60)));
 
       countStartTimerId = setTimeout(() => {
         let beatCount = 0;
         const tick = () => {
           beatCount++;
-          const isFinal = beatCount >= totalBeats;
+          const isFinal = beatCount >= sched.totalBeats;
           playSingleCountBeep(isFinal, params);
 
           if (!isFinal) {
-            systemStatus.textContent = `🥁 カウント中（${params.bpm} BPM / ${beatCount}/${totalBeats}拍）: ${song.title}`;
+            systemStatus.textContent = `🥁 カウント中（${beatCount}/${sched.totalBeats}拍）: ${song.title}`;
             systemStatus.style.color = "#f59e0b";
           }
 
-          if (beatCount >= totalBeats) {
+          if (beatCount >= sched.totalBeats) {
             clearCountSoundTimers();
           }
         };
 
         tick();
-        if (totalBeats > 1) {
-          countIntervalId = setInterval(tick, beatIntervalMs);
+        if (sched.totalBeats > 1) {
+          countIntervalId = setInterval(tick, sched.beatIntervalMs);
         }
-      }, delayMs);
+      }, sched.delayMs);
     }
 
     // ==========================================
@@ -3155,18 +3518,22 @@
 
     function formatSongCountSummary(song) {
       const p = getEffectiveCountParams(song);
-      if (p.mode === "off" || p.durationSec <= 0 || p.volume <= 0) {
+      if (p.mode === "off" || p.volume <= 0 || (p.lengthMode === "seconds" && p.durationSec <= 0)) {
         return "🔇 カウントなし";
       }
       let posLabel = "最後";
       if (p.mode === "start") posLabel = "最初から";
-      else if (p.mode === "custom_sec") posLabel = `${p.offsetSec}秒後から`;
-      else posLabel = `ラスト${p.durationSec}秒`;
-      return `⏱️ ${posLabel} (${p.durationSec}秒 / ${p.bpm}BPM)`;
+      else if (p.mode === "custom_sec") posLabel = `${p.offsetSec}秒後〜`;
+      else if (p.mode === "before_end_sec") posLabel = `終了${p.offsetSec}秒前迄`;
+      else posLabel = "ラスト";
+
+      const lenLabel = p.lengthMode === "beats" ? `${p.beatCount}回` : `${p.durationSec}秒`;
+      const tempoLabel = p.tempoUnit === "interval_sec" ? `${p.intervalSec}秒おき` : `${p.bpm}BPM`;
+      return `⏱️ ${posLabel} (${lenLabel} / ${tempoLabel})`;
     }
 
     // ==========================================
-    // 曲リスト描画（曲ごとの個別カウント音設定付き）
+    // 曲リスト描画（1曲ごとの詳細カウント設定付き）
     // ==========================================
     function renderAllSongLists(playingIdx = currentPlayingIndex) {
       populateDirectionActionSelects();
@@ -3274,6 +3641,7 @@
         ));
         setCard.appendChild(durRow);
 
+        // ★ 1曲ごとの詳細カウント音設定ボックス
         const countBox = document.createElement("div");
         countBox.className = "sub-box";
 
@@ -3281,7 +3649,7 @@
         countHeader.style.display = "flex";
         countHeader.style.alignItems = "center";
         countHeader.style.justifyContent = "space-between";
-        countHeader.innerHTML = `<div class="sub-box-title count-title">🥁 この曲のカウント音設定</div>`;
+        countHeader.innerHTML = `<div class="sub-box-title count-title">🥁 この曲のカウント音詳細設定</div>`;
 
         const testSongCountBtn = document.createElement("button");
         testSongCountBtn.type = "button";
@@ -3298,15 +3666,16 @@
         cModeRow.style.alignItems = "center";
         cModeRow.style.justifyContent = "space-between";
         cModeRow.style.fontSize = "0.8rem";
-        cModeRow.innerHTML = `<span>鳴らすタイミング:</span>`;
+        cModeRow.innerHTML = `<span>基準位置:</span>`;
 
         const cModeSel = document.createElement("select");
         cModeSel.className = "select-input";
         cModeSel.innerHTML = `
-          <option value="global"${item.countMode === "global" ? " selected" : ""}>全体共通設定を使う</option>
+          <option value="global"${item.countMode === "global" ? " selected" : ""}>全体基本設定を使う</option>
           <option value="end"${item.countMode === "end" ? " selected" : ""}>曲が終わる直前（最後から）</option>
-          <option value="start"${item.countMode === "start" ? " selected" : ""}>曲が始まってすぐ（最初から）</option>
-          <option value="custom_sec"${item.countMode === "custom_sec" ? " selected" : ""}>開始から指定秒数後に鳴らす</option>
+          <option value="start"${item.countMode === "start" ? " selected" : ""}>曲が始まってすぐ（0.0秒〜）</option>
+          <option value="custom_sec"${item.countMode === "custom_sec" ? " selected" : ""}>開始から指定秒数後に開始</option>
+          <option value="before_end_sec"${item.countMode === "before_end_sec" ? " selected" : ""}>終了の指定秒数前に終了</option>
           <option value="off"${item.countMode === "off" ? " selected" : ""}>鳴らさない（OFF）</option>
         `;
         cModeSel.addEventListener("change", () => {
@@ -3318,22 +3687,22 @@
         countBox.appendChild(cModeRow);
 
         if (item.countMode !== "global" && item.countMode !== "off") {
-          if (item.countMode === "custom_sec") {
+          if (item.countMode === "custom_sec" || item.countMode === "before_end_sec") {
             const cOffRow = document.createElement("div");
             cOffRow.style.display = "flex";
             cOffRow.style.alignItems = "center";
             cOffRow.style.justifyContent = "space-between";
             cOffRow.style.fontSize = "0.8rem";
-            cOffRow.innerHTML = `<span>開始から何秒後:</span>`;
+            cOffRow.innerHTML = `<span>${item.countMode === "before_end_sec" ? "終了何秒前まで:" : "開始から何秒後:"}</span>`;
             cOffRow.appendChild(createStepperControl(
-              `${item.countOffsetSec}秒後`,
+              `${(item.countOffsetSec || 0).toFixed(1)}秒`,
               () => {
-                item.countOffsetSec = Math.max(0, (item.countOffsetSec || 0) - 1);
+                item.countOffsetSec = Math.max(0, +((item.countOffsetSec || 0) - 0.5).toFixed(1));
                 saveSongs();
                 renderAllSongLists();
               },
               () => {
-                item.countOffsetSec = Math.min(300, (item.countOffsetSec || 0) + 1);
+                item.countOffsetSec = Math.min(300, +((item.countOffsetSec || 0) + 0.5).toFixed(1));
                 saveSongs();
                 renderAllSongLists();
               }
@@ -3341,55 +3710,135 @@
             countBox.appendChild(cOffRow);
           }
 
-          const cDurRow = document.createElement("div");
-          cDurRow.style.display = "flex";
-          cDurRow.style.alignItems = "center";
-          cDurRow.style.justifyContent = "space-between";
-          cDurRow.style.fontSize = "0.8rem";
-          cDurRow.innerHTML = `<span>鳴らす長さ:</span>`;
-          cDurRow.appendChild(createStepperControl(
-            `${item.countDurationSec}秒間`,
-            () => {
-              let cIdx = COUNT_DURATION_STEPS.indexOf(item.countDurationSec);
-              if (cIdx === -1) cIdx = 5;
-              if (cIdx > 1) {
-                item.countDurationSec = COUNT_DURATION_STEPS[cIdx - 1];
-                saveSongs();
-                renderAllSongLists();
-              }
-            },
-            () => {
-              let cIdx = COUNT_DURATION_STEPS.indexOf(item.countDurationSec);
-              if (cIdx === -1) cIdx = 5;
-              if (cIdx < COUNT_DURATION_STEPS.length - 1) {
-                item.countDurationSec = COUNT_DURATION_STEPS[cIdx + 1];
-                saveSongs();
-                renderAllSongLists();
-              }
-            }
-          ));
-          countBox.appendChild(cDurRow);
+          // 長さor回数モード切替
+          const cLenModeRow = document.createElement("div");
+          cLenModeRow.style.display = "flex";
+          cLenModeRow.style.alignItems = "center";
+          cLenModeRow.style.justifyContent = "space-between";
+          cLenModeRow.style.fontSize = "0.8rem";
+          cLenModeRow.innerHTML = `<span>長さ/回数指定:</span>`;
+          const cLenModeSel = document.createElement("select");
+          cLenModeSel.className = "select-input";
+          cLenModeSel.innerHTML = `
+            <option value="seconds"${item.countLengthMode === "seconds" ? " selected" : ""}>秒数で指定（〇.〇秒間）</option>
+            <option value="beats"${item.countLengthMode === "beats" ? " selected" : ""}>回数で指定（ちょうど〇回）</option>
+          `;
+          cLenModeSel.addEventListener("change", () => {
+            item.countLengthMode = cLenModeSel.value;
+            saveSongs();
+            renderAllSongLists();
+          });
+          cLenModeRow.appendChild(cLenModeSel);
+          countBox.appendChild(cLenModeRow);
 
-          const cBpmRow = document.createElement("div");
-          cBpmRow.style.display = "flex";
-          cBpmRow.style.alignItems = "center";
-          cBpmRow.style.justifyContent = "space-between";
-          cBpmRow.style.fontSize = "0.8rem";
-          cBpmRow.innerHTML = `<span>速さ (BPM):</span>`;
-          cBpmRow.appendChild(createStepperControl(
-            `${item.countBpm} BPM`,
-            () => {
-              item.countBpm = Math.max(40, (item.countBpm || 120) - 5);
-              saveSongs();
-              renderAllSongLists();
-            },
-            () => {
-              item.countBpm = Math.min(240, (item.countBpm || 120) + 5);
-              saveSongs();
-              renderAllSongLists();
-            }
-          ));
-          countBox.appendChild(cBpmRow);
+          if (item.countLengthMode === "beats") {
+            const cBeatsRow = document.createElement("div");
+            cBeatsRow.style.display = "flex";
+            cBeatsRow.style.alignItems = "center";
+            cBeatsRow.style.justifyContent = "space-between";
+            cBeatsRow.style.fontSize = "0.8rem";
+            cBeatsRow.innerHTML = `<span>鳴らす回数:</span>`;
+            cBeatsRow.appendChild(createStepperControl(
+              `${item.countBeatCount ?? 4}回`,
+              () => {
+                item.countBeatCount = Math.max(1, (item.countBeatCount ?? 4) - 1);
+                saveSongs();
+                renderAllSongLists();
+              },
+              () => {
+                item.countBeatCount = Math.min(60, (item.countBeatCount ?? 4) + 1);
+                saveSongs();
+                renderAllSongLists();
+              }
+            ));
+            countBox.appendChild(cBeatsRow);
+          } else {
+            const cDurRow = document.createElement("div");
+            cDurRow.style.display = "flex";
+            cDurRow.style.alignItems = "center";
+            cDurRow.style.justifyContent = "space-between";
+            cDurRow.style.fontSize = "0.8rem";
+            cDurRow.innerHTML = `<span>鳴らす秒数:</span>`;
+            cDurRow.appendChild(createStepperControl(
+              `${(item.countDurationSec ?? 5).toFixed(1)}秒間`,
+              () => {
+                item.countDurationSec = Math.max(0.5, +((item.countDurationSec ?? 5) - 0.5).toFixed(1));
+                saveSongs();
+                renderAllSongLists();
+              },
+              () => {
+                item.countDurationSec = Math.min(120, +((item.countDurationSec ?? 5) + 0.5).toFixed(1));
+                saveSongs();
+                renderAllSongLists();
+              }
+            ));
+            countBox.appendChild(cDurRow);
+          }
+
+          // テンポ単位切替（BPM or 秒おき）
+          const cTempoUnitRow = document.createElement("div");
+          cTempoUnitRow.style.display = "flex";
+          cTempoUnitRow.style.alignItems = "center";
+          cTempoUnitRow.style.justifyContent = "space-between";
+          cTempoUnitRow.style.fontSize = "0.8rem";
+          cTempoUnitRow.innerHTML = `<span>間隔の決め方:</span>`;
+          const cTempoUnitSel = document.createElement("select");
+          cTempoUnitSel.className = "select-input";
+          cTempoUnitSel.innerHTML = `
+            <option value="bpm"${item.countTempoUnit === "bpm" ? " selected" : ""}>BPM指定</option>
+            <option value="interval_sec"${item.countTempoUnit === "interval_sec" ? " selected" : ""}>〇.〇秒おき</option>
+          `;
+          cTempoUnitSel.addEventListener("change", () => {
+            item.countTempoUnit = cTempoUnitSel.value;
+            saveSongs();
+            renderAllSongLists();
+          });
+          cTempoUnitRow.appendChild(cTempoUnitSel);
+          countBox.appendChild(cTempoUnitRow);
+
+          if (item.countTempoUnit === "interval_sec") {
+            const cIntRow = document.createElement("div");
+            cIntRow.style.display = "flex";
+            cIntRow.style.alignItems = "center";
+            cIntRow.style.justifyContent = "space-between";
+            cIntRow.style.fontSize = "0.8rem";
+            cIntRow.innerHTML = `<span>鳴らす間隔:</span>`;
+            cIntRow.appendChild(createStepperControl(
+              `${(item.countIntervalSec ?? 1.0).toFixed(1)}秒おき`,
+              () => {
+                item.countIntervalSec = Math.max(0.2, +((item.countIntervalSec ?? 1.0) - 0.1).toFixed(1));
+                saveSongs();
+                renderAllSongLists();
+              },
+              () => {
+                item.countIntervalSec = Math.min(10.0, +((item.countIntervalSec ?? 1.0) + 0.1).toFixed(1));
+                saveSongs();
+                renderAllSongLists();
+              }
+            ));
+            countBox.appendChild(cIntRow);
+          } else {
+            const cBpmRow = document.createElement("div");
+            cBpmRow.style.display = "flex";
+            cBpmRow.style.alignItems = "center";
+            cBpmRow.style.justifyContent = "space-between";
+            cBpmRow.style.fontSize = "0.8rem";
+            cBpmRow.innerHTML = `<span>速さ (BPM):</span>`;
+            cBpmRow.appendChild(createStepperControl(
+              `${item.countBpm ?? 120} BPM`,
+              () => {
+                item.countBpm = Math.max(30, (item.countBpm || 120) - 5);
+                saveSongs();
+                renderAllSongLists();
+              },
+              () => {
+                item.countBpm = Math.min(240, (item.countBpm || 120) + 5);
+                saveSongs();
+                renderAllSongLists();
+              }
+            ));
+            countBox.appendChild(cBpmRow);
+          }
 
           const cTypeRow = document.createElement("div");
           cTypeRow.style.display = "flex";
@@ -3404,14 +3853,42 @@
             <option value="beep"${item.countSoundType === "beep" ? " selected" : ""}>ピッ（電子音）</option>
             <option value="chime"${item.countSoundType === "chime" ? " selected" : ""}>ポーン（チャイム風）</option>
             <option value="pop"${item.countSoundType === "pop" ? " selected" : ""}>ポッ（ソフト音）</option>
+            <option value="wood"${item.countSoundType === "wood" ? " selected" : ""}>コン（ウッド音）</option>
+            <option value="bell"${item.countSoundType === "bell" ? " selected" : ""}>チーン（高音ベル）</option>
+            <option value="custom_audio"${item.countSoundType === "custom_audio" ? " selected" : ""}>🎵 音声ファイルURL</option>
           `;
           cTypeSel.addEventListener("change", () => {
             item.countSoundType = cTypeSel.value;
             saveSongs();
+            renderAllSongLists();
             playSingleCountBeep(false, getEffectiveCountParams(item));
           });
           cTypeRow.appendChild(cTypeSel);
           countBox.appendChild(cTypeRow);
+
+          if (item.countSoundType === "custom_audio") {
+            const cAudioIn = document.createElement("input");
+            cAudioIn.type = "text";
+            cAudioIn.className = "text-input";
+            cAudioIn.style.padding = "6px 8px";
+            cAudioIn.style.fontSize = "0.78rem";
+            cAudioIn.placeholder = "この曲専用のカウント音声ファイル名・URL";
+            cAudioIn.value = item.countCustomAudioUrl || "";
+            cAudioIn.addEventListener("change", () => {
+              item.countCustomAudioUrl = normalizeAudioPath(cAudioIn.value);
+              saveSongs();
+            });
+            countBox.appendChild(cAudioIn);
+          } else {
+            countBox.appendChild(createSliderRow("🎵 通常音程:", item.countNormalFreq ?? 880, 220, 2000, 20, "Hz", "#38bdf8", (v) => {
+              item.countNormalFreq = v;
+              saveSongs();
+            }));
+            countBox.appendChild(createSliderRow("🏁 最終拍音程:", item.countFinalFreq ?? 1320, 220, 2600, 20, "Hz", "#f59e0b", (v) => {
+              item.countFinalFreq = v;
+              saveSongs();
+            }));
+          }
 
           countBox.appendChild(createVolumeSliderRow("🔊 カウント音量:", item.countVolume, "#34d399", (v) => {
             item.countVolume = v;
@@ -3491,7 +3968,7 @@
         startInput.type = "number";
         startInput.min = "0";
         startInput.max = "600";
-        startInput.step = "1";
+        startInput.step = "0.5";
         startInput.className = "sec-num-input";
         startInput.value = String(item.highlightStart);
 
@@ -3499,7 +3976,7 @@
         endInput.type = "number";
         endInput.min = "0";
         endInput.max = "600";
-        endInput.step = "1";
+        endInput.step = "0.5";
         endInput.className = "sec-num-input";
         endInput.value = String(item.highlightEnd);
 
@@ -3547,7 +4024,7 @@
 
       const badge = document.createElement("span");
       badge.className = "val-badge";
-      badge.style.fontSize = "0.86rem";
+      badge.style.fontSize = "0.84rem";
       badge.textContent = labelText;
 
       const plusBtn = document.createElement("button");
@@ -3564,12 +4041,12 @@
       return wrap;
     }
 
-    function createVolumeSliderRow(labelStr, initVal, colorHex, onChange) {
+    function createSliderRow(labelStr, initVal, minVal, maxVal, stepVal, unitStr, colorHex, onChange) {
       const row = document.createElement("div");
       row.style.display = "flex";
       row.style.alignItems = "center";
       row.style.gap = "8px";
-      row.style.fontSize = "0.8rem";
+      row.style.fontSize = "0.78rem";
 
       const lbl = document.createElement("span");
       lbl.textContent = labelStr;
@@ -3577,20 +4054,21 @@
 
       const slider = document.createElement("input");
       slider.type = "range";
-      slider.min = "0";
-      slider.max = "100";
+      slider.min = String(minVal);
+      slider.max = String(maxVal);
+      slider.step = String(stepVal);
       slider.value = String(initVal);
 
       const valSpan = document.createElement("span");
-      valSpan.style.width = "38px";
+      valSpan.style.width = "48px";
       valSpan.style.textAlign = "right";
       valSpan.style.fontWeight = "bold";
       valSpan.style.color = colorHex;
-      valSpan.textContent = `${initVal}%`;
+      valSpan.textContent = `${initVal}${unitStr}`;
 
       slider.addEventListener("input", (e) => {
         const v = parseInt(e.target.value, 10);
-        valSpan.textContent = `${v}%`;
+        valSpan.textContent = `${v}${unitStr}`;
         onChange(v);
       });
 
@@ -3598,6 +4076,10 @@
       row.appendChild(slider);
       row.appendChild(valSpan);
       return row;
+    }
+
+    function createVolumeSliderRow(labelStr, initVal, colorHex, onChange) {
+      return createSliderRow(labelStr, initVal, 0, 100, 1, "%", colorHex, onChange);
     }
 
     addUrlBtn.addEventListener("click", () => {
@@ -3619,12 +4101,7 @@
         fadeIn: 0.5,
         fadeOut: 1.5,
         duration: 0,
-        countMode: "global",
-        countOffsetSec: 0,
-        countDurationSec: 5,
-        countBpm: 120,
-        countSoundType: "beep",
-        countVolume: 70
+        countMode: "global"
       }));
       newTitleInput.value = "";
       newUrlInput.value = "";
@@ -3803,66 +4280,28 @@
       }
     });
 
-    function updateCountDurationUI() {
-      countSoundDurationSec = COUNT_DURATION_STEPS[countDurIndex];
-      syncCountConfigUI();
-      saveCountConfig();
-    }
-
-    countDurMinusBtn.addEventListener("click", () => {
-      if (countDurIndex > 0) {
-        countDurIndex--;
-        updateCountDurationUI();
-      }
-    });
-
-    countDurPlusBtn.addEventListener("click", () => {
-      if (countDurIndex < COUNT_DURATION_STEPS.length - 1) {
-        countDurIndex++;
-        updateCountDurationUI();
-      }
-    });
-
-    function setBpmValue(newBpm) {
-      countBpm = Math.max(40, Math.min(240, newBpm));
-      syncCountConfigUI();
-      saveCountConfig();
-    }
-
-    bpmMinusBtn.addEventListener("click", () => setBpmValue(countBpm - 1));
-    bpmPlusBtn.addEventListener("click", () => setBpmValue(countBpm + 1));
-    bpmSlider.addEventListener("input", (e) => setBpmValue(parseInt(e.target.value, 10)));
-
-    countSoundType.addEventListener("change", (e) => {
-      countSoundMode = e.target.value;
-      saveCountConfig();
-      playSingleCountBeep(false);
-    });
-
-    countVolumeSlider.addEventListener("input", (e) => {
-      const val = parseInt(e.target.value, 10);
-      countSoundVol = val / 100;
-      countVolumeVal.textContent = `${val}%`;
-      saveCountConfig();
-    });
-
     let testCountTimer = null;
     function previewCountParams(params) {
       if (testCountTimer) {
         clearInterval(testCountTimer);
         testCountTimer = null;
       }
-      if (params.mode === "off" || params.durationSec <= 0) {
-        playSingleCountBeep(true, { ...params, durationSec: 1, volume: Math.max(0.5, params.volume) });
+      if (params.mode === "off") {
+        playSingleCountBeep(true, { ...params, volume: Math.max(0.5, params.volume) });
         return;
       }
-      const beatIntervalMs = (60 / params.bpm) * 1000;
-      const totalBeats = Math.max(1, Math.round(params.durationSec * (params.bpm / 60)));
-      let step = 0;
+      const sched = computeCountSchedule(15, params);
+      if (sched.totalBeats <= 0) return;
 
+      if (params.soundMode === "custom_audio" && params.customAudioUrl && params.lengthMode === "seconds") {
+        playSingleCountBeep(true, params);
+        return;
+      }
+
+      let step = 0;
       const runTest = () => {
         step++;
-        const isFinal = step >= totalBeats;
+        const isFinal = step >= sched.totalBeats;
         playSingleCountBeep(isFinal, params);
         if (isFinal && testCountTimer) {
           clearInterval(testCountTimer);
@@ -3871,20 +4310,13 @@
       };
 
       runTest();
-      if (totalBeats > 1) {
-        testCountTimer = setInterval(runTest, beatIntervalMs);
+      if (sched.totalBeats > 1) {
+        testCountTimer = setInterval(runTest, sched.beatIntervalMs);
       }
     }
 
     testCountSoundBtn.addEventListener("click", () => {
-      previewCountParams({
-        mode: countTimingMode.value,
-        offsetSec: savedCountConfig.offsetSec || 0,
-        durationSec: countSoundDurationSec,
-        bpm: countBpm,
-        soundMode: countSoundMode,
-        volume: countSoundVol
-      });
+      previewCountParams(getEffectiveCountParams(null));
     });
 
     stopMusicBtn.addEventListener("click", () => {
@@ -3909,7 +4341,7 @@
     });
 
     // ==========================================
-    // 顔認証（高精度化 ＋ リアルタイムスコア表示）
+    // 顔認証
     // ==========================================
     async function runFaceRecognitionStep() {
       if (isRunningFaceCheck || !faceModelsLoaded || !isCameraActive || webcamVideo.readyState < 2) return;
@@ -3971,7 +4403,7 @@
     }
 
     // ==========================================
-    // メイン検出ループ（入室時の服装記憶 ＋ 退出時の服装・荷物照合）
+    // メイン検出ループ
     // ==========================================
     async function detectLoop() {
       if (!isCameraActive || !personModel) return;
@@ -4014,7 +4446,6 @@
           const mainPerson = persons[0];
           const [mx, my, mw, mh] = mainPerson.bbox;
 
-          // 通過中の服装・荷物特徴を更新（一番大きく鮮明に映ったフレームを保持）
           const currentSample = extractOutfitSignature(webcamVideo, mainPerson.bbox, vw, vh);
           if (currentSample) {
             if (!trackPeakOutfitSample || currentSample.area >= trackPeakOutfitSample.area * 0.85) {
@@ -4027,7 +4458,6 @@
             trackVerifiedNameThisPass = verifiedFaceName;
           }
 
-          // 服装・荷物記憶とのリアルタイム照合（帰宅判定用）
           const outfitCheck = (savedOutfitConfig.enabled && (trackPeakOutfitSample || currentSample))
             ? findMatchingEntryOutfit(trackPeakOutfitSample || currentSample)
             : null;
@@ -4059,7 +4489,6 @@
           trackLastX = centerXNorm;
           trackLastSeenTime = now;
 
-          // インカメラ（鏡像反転）時は左右の移動量も反転して画面の見た目と一致させる
           const rawDeltaX = trackLastX - trackStartX;
           const deltaX = currentFacingMode === "user" ? -rawDeltaX : rawDeltaX;
 
@@ -4070,7 +4499,6 @@
               : !movedLeftToRight;
 
             if (isEnter) {
-              // ★ 入室方向（行き）：顔認証（ON時）が通れば入室カウント＋服装・荷物を自動記憶
               const canEnter = !savedFaceConfig.enabled || Boolean(verifiedFaceName);
               if (canEnter) {
                 if (now - lastTriggerTime >= cooldownSec * 1000) {
@@ -4084,10 +4512,6 @@
                 systemStatus.style.color = "#f59e0b";
               }
             } else {
-              // ★ 退出方向（帰り）：
-              // 1) 行きの服装・荷物記憶と一致した場合、または
-              // 2) 顔認証が一致した場合、または
-              // 3) 服装照合も顔認証もOFFの場合 に「帰宅」と判定して毎回音を鳴らす
               const hasMemoryList = savedOutfitConfig.enabled && activeEntryOutfits.length > 0;
               let canExit = false;
               let exitLabelName = verifiedFaceName || "";
@@ -4097,7 +4521,6 @@
                   canExit = true;
                   const pctScore = Math.round(outfitCheck.similarity * 100);
                   exitLabelName = `${outfitCheck.item.label}・服装一致${pctScore}%`;
-                  // 帰宅完了した人の服装記憶を1件消化する
                   activeEntryOutfits.splice(outfitCheck.index, 1);
                   renderOutfitMemoryList();
                   scheduleCloudPush();
@@ -4167,7 +4590,6 @@
       }
     });
 
-    // 初期描画＆起動前クラウド事前同期
     loadDailyStats();
     syncAllUIFromState();
     updateCameraButtonsUI();
