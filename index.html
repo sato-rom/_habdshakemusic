@@ -507,7 +507,7 @@
       flex-shrink: 0;
     }
 
-    /* ワンタップ効果音パッド（4ボタン） */
+    /* ワンタップ効果音パッド（2ボタン横並び） */
     .sfx-grid {
       display: grid;
       grid-template-columns: repeat(2, 1fr);
@@ -518,7 +518,7 @@
       background: #0f172a;
       border: 1.5px solid #334155;
       border-radius: 14px;
-      padding: 14px 10px;
+      padding: 16px 10px;
       color: #f8fafc;
       font-weight: bold;
       cursor: pointer;
@@ -538,8 +538,8 @@
       background: rgba(245, 158, 11, 0.2);
     }
 
-    .sfx-emoji { font-size: 1.55rem; line-height: 1.1; }
-    .sfx-name { font-size: 0.95rem; color: #f8fafc; }
+    .sfx-emoji { font-size: 1.65rem; line-height: 1.1; }
+    .sfx-name { font-size: 0.98rem; color: #f8fafc; }
     .sfx-file { font-size: 0.68rem; color: #64748b; }
 
     /* トグルスイッチ */
@@ -910,7 +910,7 @@
         </div>
       </div>
 
-      <!-- ワンタップ効果音パッド -->
+      <!-- ワンタップ効果音パッド（2ボタンのみ） -->
       <div class="card">
         <div style="display: flex; justify-content: space-between; align-items: center;">
           <span style="font-size: 0.95rem; font-weight: bold; color: #fbbf24;">⚡ 効果音ワンタップ再生</span>
@@ -1072,9 +1072,9 @@
 
       <!-- ワンタップ効果音パッド設定 -->
       <div class="card">
-        <div style="font-size: 0.95rem; font-weight: bold; color: #fbbf24;">⚡ 効果音ボタン（拍手・パフ等）のファイル設定</div>
+        <div style="font-size: 0.95rem; font-weight: bold; color: #fbbf24;">⚡ 効果音ボタン（歓声・キラッ）のファイル設定</div>
         <div style="font-size: 0.75rem; color: #94a3b8; line-height: 1.45;">
-          ※ 拍手やパフが鳴らない場合は、GitHubに置いた実際のファイル名（またはDropboxリンク）に合わせて書き換えてください。
+          ※ 音が鳴らない場合は、GitHubに置いた実際のファイル名（またはDropboxリンク）に合わせて書き換えてください。
         </div>
 
         <div class="ctrl-row">
@@ -1236,14 +1236,12 @@
     // （Firebase Console > プロジェクト設定 > マイアプリ > SDKの設定と構成）
     // =========================================================
     const FIREBASE_CONFIG = {
-     apiKey: "AIzaSyBXIOyPImlqiPAX-4JbZ_LNZrzT9_SIazc",
-    authDomain: "sotugyouken-2ec79.firebaseapp.com",
-    databaseURL: "https://sotugyouken-2ec79-default-rtdb.asia-southeast1.firebasedatabase.app",
-    projectId: "sotugyouken-2ec79",
-    storageBucket: "sotugyouken-2ec79.firebasestorage.app",
-    messagingSenderId: "682579514497",
-    appId: "1:682579514497:web:f4f3cb5b33637d7dade980",
-    measurementId: "G-6SXYHSS0H8"
+      apiKey: "",
+      authDomain: "",
+      projectId: "",
+      storageBucket: "",
+      messagingSenderId: "",
+      appId: ""
     };
 
     // =========================================================
@@ -1252,12 +1250,30 @@
     const FACE_MODEL_URL = "https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7.13/model";
 
     // =========================================================
-    // ★ 3. ワンタップ効果音ボタン初期定義
+    // ★ 3. ワンタップ効果音ボタン（歓声とキラッの2つのみ）
     // =========================================================
     const DEFAULT_SFX_BUTTONS = [
       { emoji: "🎉", label: "歓声", file: "./歓声と拍手1.mp3" },
       { emoji: "✨", label: "キラッ", file: "./キラッ1.mp3" }
     ];
+
+    // 常に「歓声」と「キラッ」の2ボタンだけに整えるフィルター関数
+    function enforceTwoSfxButtons(list) {
+      if (!Array.isArray(list) || list.length === 0) {
+        return DEFAULT_SFX_BUTTONS.map(x => ({ ...x }));
+      }
+      const filtered = list
+        .filter(item => item && (item.label === "歓声" || item.label === "キラッ"))
+        .slice(0, 2);
+      if (filtered.length !== 2) {
+        return DEFAULT_SFX_BUTTONS.map(x => ({ ...x }));
+      }
+      return filtered.map(item => ({
+        emoji: item.emoji || (item.label === "歓声" ? "🎉" : "✨"),
+        label: item.label,
+        file: normalizeAudioPath(item.file || (item.label === "歓声" ? "./歓声と拍手1.mp3" : "./キラッ1.mp3"))
+      }));
+    }
 
     const DEFAULT_SONGS = [
       {
@@ -1423,8 +1439,9 @@
     let syncGroupId = localStorage.getItem("person_sound_sync_group_v1") || "default_room";
     syncGroupIdInput.value = syncGroupId;
 
-    // 効果音ボタンリスト
-    let sfxButtons = JSON.parse(localStorage.getItem("person_sound_sfx_v1") || "null") || DEFAULT_SFX_BUTTONS.map(x => ({ ...x }));
+    // 効果音ボタンリスト（常に2つのみ）
+    localStorage.removeItem("person_sound_sfx_v1");
+    let sfxButtons = enforceTwoSfxButtons(JSON.parse(localStorage.getItem("person_sound_sfx_two_only") || "null"));
 
     // 歩く速さ・通過感度設定
     let savedWalkConfig = JSON.parse(localStorage.getItem("person_sound_walk_cfg_v1") || "null") || {
@@ -1565,13 +1582,14 @@
     }
 
     function saveAllToLocalStorage() {
+      sfxButtons = enforceTwoSfxButtons(sfxButtons);
       localStorage.setItem("person_sound_songs_v6", JSON.stringify(songList));
       localStorage.setItem("person_sound_face_cfg_v1", JSON.stringify(savedFaceConfig));
       localStorage.setItem("person_sound_faces_v1", JSON.stringify(registeredFaces));
       localStorage.setItem("person_sound_walk_cfg_v1", JSON.stringify(savedWalkConfig));
       localStorage.setItem("person_sound_dir_modes_v1", JSON.stringify(savedDirectionModes));
       localStorage.setItem("person_sound_count_cfg_v1", JSON.stringify(savedCountConfig));
-      localStorage.setItem("person_sound_sfx_v1", JSON.stringify(sfxButtons));
+      localStorage.setItem("person_sound_sfx_two_only", JSON.stringify(sfxButtons));
       localStorage.setItem("person_sound_ops_cfg_v1", JSON.stringify(savedOpsConfig));
     }
 
@@ -1593,7 +1611,7 @@
             savedWalkConfig,
             savedDirectionModes,
             savedCountConfig,
-            sfxButtons,
+            sfxButtons: enforceTwoSfxButtons(sfxButtons),
             savedOpsConfig
           };
           await firestoreDb.collection("entry_exit_shared_rooms").doc(syncGroupId).set(payload);
@@ -1609,6 +1627,7 @@
     function applyRemoteDataToState(data) {
       if (!data) return;
       isApplyingRemoteSnapshot = true;
+      let hadExtraSfxButtons = false;
       try {
         if (Array.isArray(data.songList)) {
           songList = data.songList.map(s => ({
@@ -1644,7 +1663,10 @@
           countSoundVol = typeof savedCountConfig.volume === "number" ? savedCountConfig.volume : 0.7;
         }
         if (Array.isArray(data.sfxButtons)) {
-          sfxButtons = data.sfxButtons;
+          if (data.sfxButtons.length > 2) {
+            hadExtraSfxButtons = true;
+          }
+          sfxButtons = enforceTwoSfxButtons(data.sfxButtons);
         }
         if (data.savedOpsConfig) {
           savedOpsConfig = { ...savedOpsConfig, ...data.savedOpsConfig };
@@ -1658,6 +1680,10 @@
         syncAllUIFromState();
       } finally {
         isApplyingRemoteSnapshot = false;
+      }
+
+      if (hadExtraSfxButtons) {
+        scheduleCloudPush();
       }
     }
 
@@ -2104,13 +2130,15 @@
     });
 
     // ==========================================
-    // ワンタップ効果音パッド描画＆自動フォールバック再生
+    // ワンタップ効果音パッド描画（歓声・キラッの2つのみ）
     // ==========================================
     function saveSfxConfig() {
+      sfxButtons = enforceTwoSfxButtons(sfxButtons);
       scheduleCloudPush();
     }
 
     function renderSfxPads() {
+      sfxButtons = enforceTwoSfxButtons(sfxButtons);
       sfxPadGrid.innerHTML = "";
       sfxButtons.forEach((sfx) => {
         const btn = document.createElement("button");
