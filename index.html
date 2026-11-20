@@ -107,6 +107,11 @@
       object-fit: cover;
     }
 
+    /* インカメラ時の鏡像（左右反転）表示 */
+    .mirror-view {
+      transform: scaleX(-1);
+    }
+
     .cam-side-tag {
       position: absolute;
       bottom: 3px;
@@ -404,11 +409,11 @@
 
     .btn {
       flex: 1;
-      min-width: 100px;
-      padding: 11px 8px;
+      min-width: 96px;
+      padding: 11px 6px;
       border-radius: 12px;
       border: none;
-      font-size: 0.82rem;
+      font-size: 0.8rem;
       font-weight: bold;
       cursor: pointer;
     }
@@ -895,6 +900,7 @@
 
         <div class="btn-row">
           <button class="btn btn-cam-power" id="toggleCamPowerBtn" type="button">📷 カメラ停止（完全OFF）</button>
+          <button class="btn btn-cam" id="switchFacingBtn" type="button">🔄 内/外カメラ切替</button>
           <button class="btn btn-cam" id="toggleCamViewBtn" type="button">🙈 ワイプ隠す</button>
         </div>
         <div class="btn-row">
@@ -1230,7 +1236,7 @@
     // （Firebase Console > プロジェクト設定 > マイアプリ > SDKの設定と構成）
     // =========================================================
     const FIREBASE_CONFIG = {
-       apiKey: "AIzaSyBXIOyPImlqiPAX-4JbZ_LNZrzT9_SIazc",
+     apiKey: "AIzaSyBXIOyPImlqiPAX-4JbZ_LNZrzT9_SIazc",
     authDomain: "sotugyouken-2ec79.firebaseapp.com",
     databaseURL: "https://sotugyouken-2ec79-default-rtdb.asia-southeast1.firebasedatabase.app",
     projectId: "sotugyouken-2ec79",
@@ -1307,7 +1313,10 @@
     const camLeftTag = document.getElementById("camLeftTag");
     const camRightTag = document.getElementById("camRightTag");
     const toggleCamPowerBtn = document.getElementById("toggleCamPowerBtn");
+    const switchFacingBtn = document.getElementById("switchFacingBtn");
     const toggleCamViewBtn = document.getElementById("toggleCamViewBtn");
+    let currentFacingMode = localStorage.getItem("person_sound_cam_facing") || "environment";
+
     const autoOffInSettingsToggle = document.getElementById("autoOffInSettingsToggle");
     const settingsCamToggleBtn = document.getElementById("settingsCamToggleBtn");
 
@@ -1568,7 +1577,6 @@
       localStorage.setItem("person_sound_ops_cfg_v1", JSON.stringify(savedOpsConfig));
     }
 
-    // 変更があったときにクラウド（Firestore）へ自動送信（連続操作をまとめて500ms後に送信）
     function scheduleCloudPush() {
       saveAllToLocalStorage();
       if (!firestoreDb || isApplyingRemoteSnapshot) return;
@@ -1600,7 +1608,6 @@
       }, 500);
     }
 
-    // 他端末から更新が届いたときに画面へ即時反映
     function applyRemoteDataToState(data) {
       if (!data) return;
       isApplyingRemoteSnapshot = true;
@@ -1703,13 +1710,11 @@
         unsubscribeFirestore = docRef.onSnapshot((snap) => {
           if (snap.exists) {
             const data = snap.data();
-            // 他端末が更新したデータ、または初回受信時は画面へ反映
             if (data.updatedBy !== DEVICE_CLIENT_ID || !cloudPushTimer) {
               applyRemoteDataToState(data);
             }
             setSyncBadge(`✅ 全端末リアルタイム同期中 (${groupId})`, "#10b981");
           } else {
-            // クラウドにまだデータがない場合は現在の端末データを初回アップロード
             scheduleCloudPush();
           }
         }, (err) => {
@@ -2302,9 +2307,20 @@
     testExitBtn.addEventListener("click", () => handlePersonDirectionEvent("exit", true));
 
     // ==========================================
-    // カメラハードウェアの完全起動 / 完全停止制御
+    // カメラハードウェアの完全起動 / 完全停止 / 内外切替＆鏡像反転
     // ==========================================
+    function applyCameraMirrorState() {
+      const isFrontCam = currentFacingMode === "user";
+      webcamVideo.classList.toggle("mirror-view", isFrontCam);
+      overlayCanvas.classList.toggle("mirror-view", isFrontCam);
+      if (faceMirrorCanvas) {
+        faceMirrorCanvas.classList.toggle("mirror-view", isFrontCam);
+      }
+      switchFacingBtn.textContent = isFrontCam ? "🔄 外カメラへ切替" : "🔄 内カメラへ切替";
+    }
+
     function updateCameraButtonsUI() {
+      applyCameraMirrorState();
       if (isCameraActive) {
         toggleCamPowerBtn.textContent = "📷 カメラ停止（完全OFF）";
         toggleCamPowerBtn.classList.remove("off-state");
@@ -2344,10 +2360,11 @@
         systemStatus.style.color = "#38bdf8";
 
         mediaStream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: "environment", width: { ideal: 640 }, height: { ideal: 480 } },
+          video: { facingMode: currentFacingMode, width: { ideal: 640 }, height: { ideal: 480 } },
           audio: false
         });
         webcamVideo.srcObject = mediaStream;
+        applyCameraMirrorState();
         await webcamVideo.play();
 
         await loadAllAiModels();
@@ -2399,6 +2416,20 @@
 
     toggleCamPowerBtn.addEventListener("click", toggleManualCamera);
     settingsCamToggleBtn.addEventListener("click", toggleManualCamera);
+
+    switchFacingBtn.addEventListener("click", async () => {
+      currentFacingMode = currentFacingMode === "environment" ? "user" : "environment";
+      localStorage.setItem("person_sound_cam_facing", currentFacingMode);
+      applyCameraMirrorState();
+      if (isCameraActive) {
+        stopCameraHardware("🔄 カメラの向きを切り替えています...");
+        await startCameraHardware();
+      } else {
+        systemStatus.textContent = currentFacingMode === "user"
+          ? "📷 次回起動時は「内カメラ（鏡像表示）」で起動します"
+          : "📷 次回起動時は「外カメラ（背面）」で起動します";
+      }
+    });
 
     autoOffInSettingsToggle.addEventListener("change", async () => {
       if (activeScreenId === "settingsScreen") {
@@ -3409,7 +3440,10 @@
           trackLastX = centerXNorm;
           trackLastSeenTime = now;
 
-          const deltaX = trackLastX - trackStartX;
+          // インカメラ（鏡像反転）時は左右の移動量も反転して画面の見た目と一致させる
+          const rawDeltaX = trackLastX - trackStartX;
+          const deltaX = currentFacingMode === "user" ? -rawDeltaX : rawDeltaX;
+
           if (!trackTriggeredThisPass && Math.abs(deltaX) >= savedWalkConfig.moveRatio) {
             if (isVerifiedNow) {
               if (now - lastTriggerTime >= cooldownSec * 1000) {
