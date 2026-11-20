@@ -320,6 +320,49 @@
       border: 1px solid #475569;
     }
 
+    /* 帰宅待ち（服装・荷物記憶）カード */
+    .outfit-memory-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .outfit-memory-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      background: #0f172a;
+      border: 1px solid #334155;
+      border-radius: 12px;
+      padding: 8px 10px;
+    }
+
+    .outfit-thumb {
+      width: 44px;
+      height: 54px;
+      border-radius: 8px;
+      object-fit: cover;
+      background: #1e293b;
+      border: 1px solid #475569;
+      flex-shrink: 0;
+    }
+
+    .color-swatch-row {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      margin-top: 3px;
+    }
+
+    .color-dot {
+      width: 13px;
+      height: 13px;
+      border-radius: 50%;
+      border: 1px solid rgba(255, 255, 255, 0.4);
+      display: inline-block;
+    }
+
     /* カウント＆1日の上限ステータス表示 */
     .status-grid {
       display: grid;
@@ -631,6 +674,12 @@
       border: 1px solid rgba(245, 158, 11, 0.35);
     }
 
+    .meta-tag.count-tag {
+      background: rgba(16, 185, 129, 0.16);
+      color: #34d399;
+      border: 1px solid rgba(16, 185, 129, 0.35);
+    }
+
     .meta-tag.github {
       background: rgba(56, 189, 248, 0.15);
       color: #38bdf8;
@@ -695,7 +744,7 @@
       border-radius: 10px;
       padding: 7px 9px;
       font-size: 0.82rem;
-      max-width: 200px;
+      max-width: 205px;
     }
 
     /* 入力フォーム */
@@ -760,6 +809,7 @@
     }
 
     .mini-play { background: #10b981; color: #0f172a; }
+    .mini-test-cnt { background: #0284c7; color: #fff; }
     .mini-del { background: #334155; color: #f87171; }
 
     .per-song-ctrl {
@@ -789,6 +839,10 @@
       color: #fbbf24;
     }
 
+    .sub-box-title.count-title {
+      color: #34d399;
+    }
+
     .time-range-inputs {
       display: flex;
       align-items: center;
@@ -813,7 +867,7 @@
   <div id="startOverlay">
     <h2 style="font-size: 1.5rem; color: #38bdf8;">👤 顔認証・入退出サウンド</h2>
     <p style="color: #94a3b8; font-size: 0.9rem; line-height: 1.6;">
-      Firebase Firestore クラウド自動同期対応。<br>どのスマホ・PCから開いても顔データと曲設定が共有されます。
+      Firebase Firestore クラウド自動同期対応。<br>入室時の服装・荷物を記憶し、同じ服装・荷物が帰宅方向に通ると毎回退出音を鳴らします。
     </p>
     <button id="startBtn" type="button">▶ システムを起動する</button>
     <div id="loadingMsg" style="font-size: 0.85rem; color: #f59e0b;"></div>
@@ -824,13 +878,13 @@
   <nav id="navDrawer">
     <div class="drawer-title">画面切り替えメニュー</div>
     <button class="nav-item-btn active" data-target="mainScreen" type="button">
-      <span>🎵</span><span>メイン（状況・効果音・曲）</span>
+      <span>🎵</span><span>メイン（状況・服装記憶・曲）</span>
     </button>
     <button class="nav-item-btn" data-target="faceAuthScreen" type="button">
       <span>👤</span><span>顔認証設定（全端末共有）</span>
     </button>
     <button class="nav-item-btn" data-target="settingsScreen" type="button">
-      <span>⚙️</span><span>設定（クラウド同期・曲・時間）</span>
+      <span>⚙️</span><span>設定（帰宅照合・曲・時間）</span>
     </button>
   </nav>
 
@@ -908,6 +962,18 @@
           <button class="btn btn-exit" id="testExitBtn" type="button">⬅ 退出曲テスト</button>
           <button class="btn btn-stop" id="stopMusicBtn" type="button">⏹ 全停止</button>
         </div>
+      </div>
+
+      <!-- 帰宅判定用：入室時に記憶した服装・荷物リスト -->
+      <div class="card">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <span style="font-size: 0.95rem; font-weight: bold; color: #f59e0b;">🎒 帰宅判定待ち（行きの服装・荷物記憶）</span>
+          <button type="button" class="mini-btn mini-del" id="clearOutfitsBtn">全消去</button>
+        </div>
+        <div style="font-size: 0.74rem; color: #94a3b8; line-height: 1.4;">
+          入室時に服装・荷物を自動記憶します。同じ服装・シルエットが退出方向に通ると毎回退出音を鳴らします。
+        </div>
+        <div class="outfit-memory-list" id="outfitMemoryListContainer"></div>
       </div>
 
       <!-- ワンタップ効果音パッド（2ボタンのみ） -->
@@ -1007,10 +1073,87 @@
         <div id="settingsSyncDetail" style="font-size: 0.75rem; color: #38bdf8;">接続状態を確認中...</div>
       </div>
 
-      <!-- 曲再生中に流れるカウント音の設定 -->
+      <!-- 退出時の服装・荷物照合設定 -->
+      <div class="card">
+        <div style="font-size: 0.95rem; font-weight: bold; color: #f59e0b;">🎒 帰宅判定（行きの服装・荷物の記憶照合）</div>
+
+        <div class="ctrl-row">
+          <div style="flex: 1;">
+            <div style="font-weight: bold;">行きと同じ服装・荷物が通ったら退出（帰宅）と判定する</div>
+            <div style="font-size: 0.74rem; color: #94a3b8; margin-top: 2px;">
+              後ろ向きやマスク姿で顔が見えない帰り道でも、行きの服の色や荷物の大きさ・シルエットが一致すれば毎回退出音を鳴らします
+            </div>
+          </div>
+          <label class="toggle-switch">
+            <input type="checkbox" id="outfitMatchEnabledToggle" checked />
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+
+        <div class="ctrl-row" style="padding-top: 8px; border-top: 1px dashed #334155;">
+          <span style="white-space: nowrap;">🎯 服装・荷物の一致基準:</span>
+          <input type="range" id="outfitSimilaritySlider" min="45" max="85" value="62" />
+          <span id="outfitSimilarityVal" style="width: 44px; text-align: right; color: #f59e0b; font-weight: bold;">62%</span>
+        </div>
+        <div style="font-size: 0.73rem; color: #94a3b8;">
+          ※ 照明の変化で反応しづらい場合は数値を下げる（50%〜55%）、関係ない人に反応する場合は上げる（70%以上）と安定します。
+        </div>
+      </div>
+
+      <!-- 入退出の方向＆曲割り当て設定 -->
+      <div class="card">
+        <div style="font-size: 0.95rem; font-weight: bold; color: #10b981;">🚪 入退出の方向判定・曲割り当て設定</div>
+
+        <div class="ctrl-row">
+          <span>🧭 入室と判定する向き:</span>
+          <select id="enterDirectionSelect" class="select-input">
+            <option value="left_to_right">画面の 左 ➔ 右 を「入室」</option>
+            <option value="right_to_left">画面の 右 ➔ 左 を「入室」</option>
+          </select>
+        </div>
+
+        <div class="ctrl-row">
+          <span>➡ 入室時に流す曲:</span>
+          <select id="enterSoundSelect" class="select-input"></select>
+        </div>
+
+        <div class="ctrl-row">
+          <span>⬅ 退出時に流す曲:</span>
+          <select id="exitSoundSelect" class="select-input"></select>
+        </div>
+
+        <div class="ctrl-row">
+          <div style="flex: 1;">
+            <div style="font-weight: bold;">退出時は人数カウントに関係なく毎回即鳴らす</div>
+            <div style="font-size: 0.73rem; color: #94a3b8;">ONにすると帰宅判定されるたびに毎回退出曲が鳴ります</div>
+          </div>
+          <label class="toggle-switch">
+            <input type="checkbox" id="exitImmediateToggle" checked />
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+      </div>
+
+      <!-- 外部リンクURL・GitHubファイル追加＆1曲ごとの個別設定 -->
+      <div class="card">
+        <div style="font-size: 0.95rem; font-weight: bold; color: #38bdf8;">🎵 曲リストの追加・曲ごとの個別設定（カウント音・長さ・音量）</div>
+        <div style="font-size: 0.76rem; color: #94a3b8; line-height: 1.45;">
+          ※ 各曲のカード内で「カウント音を入れるタイミング・秒数・BPM・音の種類」を曲ごとに個別に設定できます。
+        </div>
+
+        <div class="url-input-col">
+          <input type="text" id="newTitleInput" class="text-input" placeholder="表示名（省略可）" />
+          <input type="text" id="newUrlInput" class="text-input" placeholder="GitHubファイル名・Dropbox共有リンク・外部URL" />
+          <button id="addUrlBtn" type="button">＋ 曲リストに追加する</button>
+        </div>
+
+        <div class="song-card-list" id="settingSongListContainer" style="margin-top: 6px;"></div>
+      </div>
+
+      <!-- 曲再生中に流れるカウント音の基本設定（初期値・共通設定） -->
       <div class="card">
         <div style="display: flex; justify-content: space-between; align-items: center;">
-          <span style="font-size: 0.95rem; font-weight: bold; color: #38bdf8;">⏱️ 曲再生中のカウント音設定</span>
+          <span style="font-size: 0.95rem; font-weight: bold; color: #38bdf8;">⏱️ カウント音の基本設定（曲で「共通設定を使う」時）</span>
           <button class="mini-btn mini-play" id="testCountSoundBtn" type="button">▶ 試聴</button>
         </div>
 
@@ -1118,40 +1261,6 @@
         </div>
       </div>
 
-      <!-- 入退出の方向＆曲割り当て設定 -->
-      <div class="card">
-        <div style="font-size: 0.95rem; font-weight: bold; color: #10b981;">🚪 入退出の方向判定・曲割り当て設定</div>
-
-        <div class="ctrl-row">
-          <span>🧭 入室と判定する向き:</span>
-          <select id="enterDirectionSelect" class="select-input">
-            <option value="left_to_right">画面の 左 ➔ 右 を「入室」</option>
-            <option value="right_to_left">画面の 右 ➔ 左 を「入室」</option>
-          </select>
-        </div>
-
-        <div class="ctrl-row">
-          <span>➡ 入室時に流す曲:</span>
-          <select id="enterSoundSelect" class="select-input"></select>
-        </div>
-
-        <div class="ctrl-row">
-          <span>⬅ 退出時に流す曲:</span>
-          <select id="exitSoundSelect" class="select-input"></select>
-        </div>
-
-        <div class="ctrl-row">
-          <div style="flex: 1;">
-            <div style="font-weight: bold;">退出時は人数カウントに関係なく即曲を鳴らす</div>
-            <div style="font-size: 0.73rem; color: #94a3b8;">OFFにすると入室と同じ人数カウントで鳴ります</div>
-          </div>
-          <label class="toggle-switch">
-            <input type="checkbox" id="exitImmediateToggle" checked />
-            <span class="toggle-slider"></span>
-          </label>
-        </div>
-      </div>
-
       <!-- カメラ動作設定 -->
       <div class="card">
         <div style="font-size: 0.95rem; font-weight: bold; color: #38bdf8;">📷 カメラ起動ルール設定</div>
@@ -1211,37 +1320,22 @@
           <button class="btn btn-reset" id="resetDailyBtn" type="button">📅 本日再生数0</button>
         </div>
       </div>
-
-      <!-- 外部リンクURL・GitHubファイル追加＆1曲ごとの個別設定 -->
-      <div class="card">
-        <div style="font-size: 0.95rem; font-weight: bold; color: #38bdf8;">🎵 曲リストの追加・個別設定（全端末共有）</div>
-        <div style="font-size: 0.76rem; color: #94a3b8; line-height: 1.45;">
-          ※ GitHubメイン直下のファイル名、またはDropbox共有リンク（自動で再生用URLに変換されます）を入力できます。
-        </div>
-
-        <div class="url-input-col">
-          <input type="text" id="newTitleInput" class="text-input" placeholder="表示名（省略可）" />
-          <input type="text" id="newUrlInput" class="text-input" placeholder="GitHubファイル名・Dropbox共有リンク・外部URL" />
-          <button id="addUrlBtn" type="button">＋ 曲リストに追加する</button>
-        </div>
-
-        <div class="song-card-list" id="settingSongListContainer" style="margin-top: 6px;"></div>
-      </div>
     </div>
   </div>
 
   <script>
     // =========================================================
-    // ★ 1. ご自身のFirebaseプロジェクト設定をここに貼り付けてください
-    // （Firebase Console > プロジェクト設定 > マイアプリ > SDKの設定と構成）
+    // ★ 1. Firebaseプロジェクト設定（反映済み）
     // =========================================================
     const FIREBASE_CONFIG = {
-      apiKey: "",
-      authDomain: "",
-      projectId: "",
-      storageBucket: "",
-      messagingSenderId: "",
-      appId: ""
+      apiKey: "AIzaSyBXIOyPImlqiPAX-4JbZ_LNZrzT9_SIazc",
+      authDomain: "sotugyouken-2ec79.firebaseapp.com",
+      databaseURL: "https://sotugyouken-2ec79-default-rtdb.asia-southeast1.firebasedatabase.app",
+      projectId: "sotugyouken-2ec79",
+      storageBucket: "sotugyouken-2ec79.firebasestorage.app",
+      messagingSenderId: "682579514497",
+      appId: "1:682579514497:web:f4f3cb5b33637d7dade980",
+      measurementId: "G-6SXYHSS0H8"
     };
 
     // =========================================================
@@ -1257,7 +1351,6 @@
       { emoji: "✨", label: "キラッ", file: "./キラッ1.mp3" }
     ];
 
-    // 常に「歓声」と「キラッ」の2ボタンだけに整えるフィルター関数
     function enforceTwoSfxButtons(list) {
       if (!Array.isArray(list) || list.length === 0) {
         return DEFAULT_SFX_BUTTONS.map(x => ({ ...x }));
@@ -1285,7 +1378,13 @@
         highlightEnd: 10,
         fadeIn: 2,
         fadeOut: 3,
-        duration: 15
+        duration: 15,
+        countMode: "end",
+        countOffsetSec: 0,
+        countDurationSec: 5,
+        countBpm: 120,
+        countSoundType: "beep",
+        countVolume: 70
       },
       {
         title: "サンプル音 2（効果音）",
@@ -1296,7 +1395,13 @@
         highlightEnd: 0,
         fadeIn: 0,
         fadeOut: 1,
-        duration: 5
+        duration: 5,
+        countMode: "off",
+        countOffsetSec: 0,
+        countDurationSec: 3,
+        countBpm: 120,
+        countSoundType: "beep",
+        countVolume: 70
       }
     ];
 
@@ -1333,6 +1438,13 @@
 
     const autoOffInSettingsToggle = document.getElementById("autoOffInSettingsToggle");
     const settingsCamToggleBtn = document.getElementById("settingsCamToggleBtn");
+
+    // 服装・荷物記憶DOM
+    const outfitMemoryListContainer = document.getElementById("outfitMemoryListContainer");
+    const clearOutfitsBtn = document.getElementById("clearOutfitsBtn");
+    const outfitMatchEnabledToggle = document.getElementById("outfitMatchEnabledToggle");
+    const outfitSimilaritySlider = document.getElementById("outfitSimilaritySlider");
+    const outfitSimilarityVal = document.getElementById("outfitSimilarityVal");
 
     // 歩く速さ設定DOM
     const speedPresetBtns = document.querySelectorAll(".speed-btn");
@@ -1443,6 +1555,13 @@
     localStorage.removeItem("person_sound_sfx_v1");
     let sfxButtons = enforceTwoSfxButtons(JSON.parse(localStorage.getItem("person_sound_sfx_two_only") || "null"));
 
+    // 服装・荷物記憶データ（入室時に自動保存・帰宅時に照合）
+    let savedOutfitConfig = JSON.parse(localStorage.getItem("person_sound_outfit_cfg_v1") || "null") || {
+      enabled: true,
+      similarityThreshold: 0.62
+    };
+    let activeEntryOutfits = JSON.parse(localStorage.getItem("person_sound_active_outfits_v1") || "[]");
+
     // 歩く速さ・通過感度設定
     let savedWalkConfig = JSON.parse(localStorage.getItem("person_sound_walk_cfg_v1") || "null") || {
       preset: "normal",
@@ -1488,11 +1607,12 @@
     let trackLastSeenTime = 0;
     let trackTriggeredThisPass = false;
     let trackVerifiedNameThisPass = null;
+    let trackPeakOutfitSample = null; // 通過中に一番大きく鮮明に映ったときの服装・荷物特徴
 
     let sfxMasterVolume = savedOpsConfig.sfxMasterVolume;
     let activeSfxAudios = [];
 
-    // カウント音設定
+    // カウント音基本設定
     let savedCountConfig = JSON.parse(localStorage.getItem("person_sound_count_cfg_v1") || "null") || {
       timingMode: "end",
       offsetSec: 0,
@@ -1514,6 +1634,237 @@
     let volumeEnvelopeRafId = null;
     let lastPlayedIndex = -1;
     let currentPlayingIndex = -1;
+
+    // ==========================================
+    // ★ 服装・荷物（シルエット・色分布）抽出＆比較エンジン
+    // ==========================================
+    const outfitSampleCanvas = document.createElement("canvas");
+    outfitSampleCanvas.width = 24;
+    outfitSampleCanvas.height = 36;
+    const outfitSampleCtx = outfitSampleCanvas.getContext("2d", { willReadFrequently: true });
+
+    function extractOutfitSignature(videoEl, bbox, vw, vh) {
+      try {
+        const [bx, by, bw, bh] = bbox;
+        if (bw < 24 || bh < 36) return null;
+
+        // 上半身〜下半身・荷物が収まる領域（左右少し余裕を持たせてリュックや手荷物も含める）
+        const padX = bw * 0.08;
+        const sx = Math.max(0, bx - padX);
+        const sy = Math.max(0, by + bh * 0.08);
+        const sw = Math.min(vw - sx, bw + padX * 2);
+        const sh = Math.min(vh - sy, bh * 0.86);
+
+        outfitSampleCtx.clearRect(0, 0, 24, 36);
+        outfitSampleCtx.drawImage(videoEl, sx, sy, sw, sh, 0, 0, 24, 36);
+        const imgData = outfitSampleCtx.getImageData(0, 0, 24, 36).data;
+
+        // 上半身(y:0..17) と 下半身+荷物(y:18..35) の平均RGB＆カラーヒストグラム(3x3x3=27ビン)
+        const histTop = new Array(27).fill(0);
+        const histBot = new Array(27).fill(0);
+        let topR = 0, topG = 0, topB = 0, topCount = 0;
+        let botR = 0, botG = 0, botB = 0, botCount = 0;
+
+        for (let y = 0; y < 36; y++) {
+          for (let x = 2; x < 22; x++) {
+            const idx = (y * 24 + x) * 4;
+            const r = imgData[idx];
+            const g = imgData[idx + 1];
+            const b = imgData[idx + 2];
+            const rBin = Math.min(2, Math.floor(r / 86));
+            const gBin = Math.min(2, Math.floor(g / 86));
+            const bBin = Math.min(2, Math.floor(b / 86));
+            const binIdx = rBin * 9 + gBin * 3 + bBin;
+
+            if (y < 18) {
+              histTop[binIdx]++;
+              topR += r; topG += g; topB += b; topCount++;
+            } else {
+              histBot[binIdx]++;
+              botR += r; botG += g; botB += b; botCount++;
+            }
+          }
+        }
+
+        const normTop = histTop.map(v => +(v / Math.max(1, topCount)).toFixed(4));
+        const normBot = histBot.map(v => +(v / Math.max(1, botCount)).toFixed(4));
+
+        const topHex = `#${[topR, topG, topB].map(c => Math.round(c / Math.max(1, topCount)).toString(16).padStart(2, "0")).join("")}`;
+        const botHex = `#${[botR, botG, botB].map(c => Math.round(c / Math.max(1, botCount)).toString(16).padStart(2, "0")).join("")}`;
+
+        // 縦横比（リュック・大きい荷物があると横幅比率が増える）と画面内の相対サイズ
+        const aspectRatio = +(bw / Math.max(1, bh)).toFixed(3);
+        const relHeight = +(bh / Math.max(1, vh)).toFixed(3);
+
+        // サムネイル生成（軽量JPEG）
+        const thumbCvs = document.createElement("canvas");
+        thumbCvs.width = 56;
+        thumbCvs.height = 72;
+        thumbCvs.getContext("2d").drawImage(videoEl, sx, sy, sw, sh, 0, 0, 56, 72);
+        const thumbnail = thumbCvs.toDataURL("image/jpeg", 0.55);
+
+        return {
+          histTop: normTop,
+          histBot: normBot,
+          topHex,
+          botHex,
+          aspectRatio,
+          relHeight,
+          area: bw * bh,
+          thumbnail
+        };
+      } catch (e) {
+        return null;
+      }
+    }
+
+    function computeOutfitSimilarity(sigA, sigB) {
+      if (!sigA || !sigB || !Array.isArray(sigA.histTop) || !Array.isArray(sigB.histTop)) return 0;
+
+      // ヒストグラム交差法（Bhattacharyya係数）で色分布の一致度を計算
+      let bhatTop = 0;
+      let bhatBot = 0;
+      for (let i = 0; i < 27; i++) {
+        bhatTop += Math.sqrt((sigA.histTop[i] || 0) * (sigB.histTop[i] || 0));
+        bhatBot += Math.sqrt((sigA.histBot[i] || 0) * (sigB.histBot[i] || 0));
+      }
+
+      // シルエット（荷物を含めた縦横比と身長比率）の一致度
+      const arDiff = Math.abs((sigA.aspectRatio || 0.45) - (sigB.aspectRatio || 0.45));
+      const arScore = Math.max(0, 1 - arDiff * 2.2);
+
+      const hDiff = Math.abs((sigA.relHeight || 0.6) - (sigB.relHeight || 0.6));
+      const hScore = Math.max(0, 1 - hDiff * 1.8);
+
+      // 総合一致率（上半身40% + 下半身・荷物35% + シルエット・荷物幅15% + 背丈10%）
+      const totalScore = bhatTop * 0.40 + bhatBot * 0.35 + arScore * 0.15 + hScore * 0.10;
+      return Math.max(0, Math.min(1, totalScore));
+    }
+
+    function findMatchingEntryOutfit(currentSig) {
+      if (!currentSig || activeEntryOutfits.length === 0) return null;
+      let bestIdx = -1;
+      let bestScore = 0;
+
+      activeEntryOutfits.forEach((item, idx) => {
+        const score = computeOutfitSimilarity(currentSig, item.signature);
+        if (score > bestScore) {
+          bestScore = score;
+          bestIdx = idx;
+        }
+      });
+
+      if (bestIdx === -1) return null;
+      return {
+        index: bestIdx,
+        item: activeEntryOutfits[bestIdx],
+        similarity: bestScore,
+        isMatch: bestScore >= savedOutfitConfig.similarityThreshold
+      };
+    }
+
+    function rememberEntryOutfit(personLabel, signature) {
+      if (!signature) return;
+      const now = new Date();
+      const timeStr = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
+      const bagLabel = signature.aspectRatio >= 0.48 ? "荷物・リュックあり体型" : "標準シルエット";
+
+      // 同じ人の古い記憶があれば最新に更新、最大8件まで保持
+      const existingIdx = activeEntryOutfits.findIndex(o => o.label === personLabel && personLabel !== "入室者");
+      const entryObj = {
+        id: `outfit_${Date.now()}`,
+        label: personLabel || "入室者",
+        timeStr,
+        bagLabel,
+        signature: {
+          histTop: signature.histTop,
+          histBot: signature.histBot,
+          topHex: signature.topHex,
+          botHex: signature.botHex,
+          aspectRatio: signature.aspectRatio,
+          relHeight: signature.relHeight,
+          thumbnail: signature.thumbnail
+        }
+      };
+
+      if (existingIdx !== -1) {
+        activeEntryOutfits[existingIdx] = entryObj;
+      } else {
+        activeEntryOutfits.unshift(entryObj);
+        if (activeEntryOutfits.length > 8) {
+          activeEntryOutfits.pop();
+        }
+      }
+
+      renderOutfitMemoryList();
+      scheduleCloudPush();
+    }
+
+    function renderOutfitMemoryList() {
+      outfitMatchEnabledToggle.checked = savedOutfitConfig.enabled;
+      const pct = Math.round(savedOutfitConfig.similarityThreshold * 100);
+      outfitSimilaritySlider.value = String(pct);
+      outfitSimilarityVal.textContent = `${pct}%`;
+
+      outfitMemoryListContainer.innerHTML = "";
+      if (activeEntryOutfits.length === 0) {
+        outfitMemoryListContainer.innerHTML = `<div style="color:#64748b; font-size:0.8rem; text-align:center; padding:8px;">現在記憶中の入室者はいません（入室すると自動で服装・荷物を記憶します）</div>`;
+        return;
+      }
+
+      activeEntryOutfits.forEach((item, idx) => {
+        const row = document.createElement("div");
+        row.className = "outfit-memory-item";
+
+        const sig = item.signature || {};
+        row.innerHTML = `
+          <div style="display:flex; align-items:center; gap:10px; overflow:hidden;">
+            <img class="outfit-thumb" src="${sig.thumbnail || ""}" alt="服装記憶" />
+            <div style="overflow:hidden;">
+              <div style="font-size:0.86rem; font-weight:bold; color:#f8fafc; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
+                ${escapeHtml(item.label)} <span style="font-size:0.72rem; color:#38bdf8;">(${escapeHtml(item.timeStr || "")} 入室)</span>
+              </div>
+              <div class="color-swatch-row">
+                <span class="color-dot" style="background:${sig.topHex || "#64748b"};" title="上半身カラー"></span>
+                <span class="color-dot" style="background:${sig.botHex || "#475569"};" title="下半身・荷物カラー"></span>
+                <span style="font-size:0.72rem; color:#cbd5e1;">${escapeHtml(item.bagLabel || "")}</span>
+              </div>
+            </div>
+          </div>
+        `;
+
+        const delBtn = document.createElement("button");
+        delBtn.type = "button";
+        delBtn.className = "mini-btn mini-del";
+        delBtn.textContent = "解除";
+        delBtn.addEventListener("click", () => {
+          activeEntryOutfits.splice(idx, 1);
+          renderOutfitMemoryList();
+          scheduleCloudPush();
+        });
+
+        row.appendChild(delBtn);
+        outfitMemoryListContainer.appendChild(row);
+      });
+    }
+
+    clearOutfitsBtn.addEventListener("click", () => {
+      activeEntryOutfits = [];
+      renderOutfitMemoryList();
+      scheduleCloudPush();
+    });
+
+    outfitMatchEnabledToggle.addEventListener("change", () => {
+      savedOutfitConfig.enabled = outfitMatchEnabledToggle.checked;
+      scheduleCloudPush();
+    });
+
+    outfitSimilaritySlider.addEventListener("input", () => {
+      const val = parseInt(outfitSimilaritySlider.value, 10);
+      savedOutfitConfig.similarityThreshold = val / 100;
+      outfitSimilarityVal.textContent = `${val}%`;
+      scheduleCloudPush();
+    });
 
     // ==========================================
     // パス正規化 & Dropboxリンク自動変換
@@ -1553,20 +1904,30 @@
       return !/^https?:\/\//i.test(url);
     }
 
+    function normalizeSongObject(s) {
+      return {
+        title: s.title || "無題の曲",
+        url: normalizeAudioPath(s.url || ""),
+        baseVolume: typeof s.baseVolume === "number" ? s.baseVolume : (typeof s.volume === "number" ? s.volume : 40),
+        peakVolume: typeof s.peakVolume === "number" ? s.peakVolume : 100,
+        highlightStart: typeof s.highlightStart === "number" ? s.highlightStart : 0,
+        highlightEnd: typeof s.highlightEnd === "number" ? s.highlightEnd : 0,
+        fadeIn: typeof s.fadeIn === "number" ? s.fadeIn : 1,
+        fadeOut: typeof s.fadeOut === "number" ? s.fadeOut : 2,
+        duration: typeof s.duration === "number" ? s.duration : 15,
+        countMode: ["global", "end", "start", "custom_sec", "off"].includes(s.countMode) ? s.countMode : "global",
+        countOffsetSec: typeof s.countOffsetSec === "number" ? s.countOffsetSec : 0,
+        countDurationSec: typeof s.countDurationSec === "number" ? s.countDurationSec : 5,
+        countBpm: typeof s.countBpm === "number" ? s.countBpm : 120,
+        countSoundType: ["beep", "chime", "pop"].includes(s.countSoundType) ? s.countSoundType : "beep",
+        countVolume: typeof s.countVolume === "number" ? s.countVolume : 70
+      };
+    }
+
     let rawSaved = JSON.parse(localStorage.getItem("person_sound_songs_v6") || "null");
     let songList = Array.isArray(rawSaved)
-      ? rawSaved.map(s => ({
-          title: s.title || "無題の曲",
-          url: normalizeAudioPath(s.url || ""),
-          baseVolume: typeof s.baseVolume === "number" ? s.baseVolume : (typeof s.volume === "number" ? s.volume : 40),
-          peakVolume: typeof s.peakVolume === "number" ? s.peakVolume : 100,
-          highlightStart: typeof s.highlightStart === "number" ? s.highlightStart : 0,
-          highlightEnd: typeof s.highlightEnd === "number" ? s.highlightEnd : 0,
-          fadeIn: typeof s.fadeIn === "number" ? s.fadeIn : 1,
-          fadeOut: typeof s.fadeOut === "number" ? s.fadeOut : 2,
-          duration: typeof s.duration === "number" ? s.duration : 15
-        }))
-      : [...DEFAULT_SONGS];
+      ? rawSaved.map(normalizeSongObject)
+      : DEFAULT_SONGS.map(normalizeSongObject);
 
     const audioPlayer = new Audio();
     audioPlayer.preload = "auto";
@@ -1586,6 +1947,8 @@
       localStorage.setItem("person_sound_songs_v6", JSON.stringify(songList));
       localStorage.setItem("person_sound_face_cfg_v1", JSON.stringify(savedFaceConfig));
       localStorage.setItem("person_sound_faces_v1", JSON.stringify(registeredFaces));
+      localStorage.setItem("person_sound_outfit_cfg_v1", JSON.stringify(savedOutfitConfig));
+      localStorage.setItem("person_sound_active_outfits_v1", JSON.stringify(activeEntryOutfits));
       localStorage.setItem("person_sound_walk_cfg_v1", JSON.stringify(savedWalkConfig));
       localStorage.setItem("person_sound_dir_modes_v1", JSON.stringify(savedDirectionModes));
       localStorage.setItem("person_sound_count_cfg_v1", JSON.stringify(savedCountConfig));
@@ -1608,6 +1971,8 @@
             songList,
             savedFaceConfig,
             registeredFaces,
+            savedOutfitConfig,
+            activeEntryOutfits,
             savedWalkConfig,
             savedDirectionModes,
             savedCountConfig,
@@ -1630,23 +1995,19 @@
       let hadExtraSfxButtons = false;
       try {
         if (Array.isArray(data.songList)) {
-          songList = data.songList.map(s => ({
-            title: s.title || "無題の曲",
-            url: normalizeAudioPath(s.url || ""),
-            baseVolume: typeof s.baseVolume === "number" ? s.baseVolume : 40,
-            peakVolume: typeof s.peakVolume === "number" ? s.peakVolume : 100,
-            highlightStart: typeof s.highlightStart === "number" ? s.highlightStart : 0,
-            highlightEnd: typeof s.highlightEnd === "number" ? s.highlightEnd : 0,
-            fadeIn: typeof s.fadeIn === "number" ? s.fadeIn : 1,
-            fadeOut: typeof s.fadeOut === "number" ? s.fadeOut : 2,
-            duration: typeof s.duration === "number" ? s.duration : 15
-          }));
+          songList = data.songList.map(normalizeSongObject);
         }
         if (data.savedFaceConfig) {
           savedFaceConfig = { ...savedFaceConfig, ...data.savedFaceConfig };
         }
         if (Array.isArray(data.registeredFaces)) {
           registeredFaces = data.registeredFaces;
+        }
+        if (data.savedOutfitConfig) {
+          savedOutfitConfig = { ...savedOutfitConfig, ...data.savedOutfitConfig };
+        }
+        if (Array.isArray(data.activeEntryOutfits)) {
+          activeEntryOutfits = data.activeEntryOutfits;
         }
         if (data.savedWalkConfig) {
           savedWalkConfig = { ...savedWalkConfig, ...data.savedWalkConfig };
@@ -1703,6 +2064,7 @@
       updateCamDirectionTags();
       updateWalkSpeedUI();
       syncCountConfigUI();
+      renderOutfitMemoryList();
       renderSfxPads();
       renderAllSongLists();
       renderRegisteredFaces();
@@ -1777,7 +2139,7 @@
     });
 
     // ==========================================
-    // カウント音タイミング・設定の保存とUI同期
+    // カウント音タイミング・基本設定の保存とUI同期
     // ==========================================
     function saveCountConfig() {
       savedCountConfig.timingMode = countTimingMode.value;
@@ -1786,6 +2148,7 @@
       savedCountConfig.soundMode = countSoundMode;
       savedCountConfig.volume = countSoundVol;
       scheduleCloudPush();
+      renderAllSongLists();
     }
 
     function syncCountConfigUI() {
@@ -2268,7 +2631,7 @@
     });
 
     // ==========================================
-    // 入室・退出それぞれの曲アクション実行
+    // 入室・退出それぞれの曲アクション実行（服装・荷物記憶連携）
     // ==========================================
     function executeActionByCode(actionCode, isTest = false, prefixLabel = "") {
       if (actionCode === "none") {
@@ -2290,7 +2653,7 @@
       }
     }
 
-    function handlePersonDirectionEvent(directionType, isTest = false, authPersonName = "") {
+    function handlePersonDirectionEvent(directionType, isTest = false, authPersonName = "", outfitSample = null) {
       const nameTag = authPersonName ? `[${authPersonName}] ` : "";
 
       if (directionType === "enter") {
@@ -2298,27 +2661,39 @@
           executeActionByCode(enterSoundSelect.value, true, "【入室テスト】");
           return;
         }
+
+        // 入室時の服装・荷物を記憶する
+        if (outfitSample) {
+          rememberEntryOutfit(authPersonName || "入室者", outfitSample);
+        }
+
         currentCount++;
         currentCountEl.textContent = currentCount;
         countStatBox.classList.add("pulse");
         setTimeout(() => countStatBox.classList.remove("pulse"), 350);
 
         if (currentCount >= targetCount) {
-          executeActionByCode(enterSoundSelect.value, false, `➡ ${nameTag}入室: `);
+          executeActionByCode(enterSoundSelect.value, false, `➡ ${nameTag}入室（服装記憶済）: `);
           currentCount = 0;
           currentCountEl.textContent = "0";
         } else {
-          systemStatus.textContent = `➡ ${nameTag}入室カウント（${currentCount}/${targetCount}人・あと ${targetCount - currentCount} 人）`;
+          systemStatus.textContent = `➡ ${nameTag}入室カウント（${currentCount}/${targetCount}人・服装記憶済）`;
           systemStatus.style.color = "#10b981";
         }
       } else if (directionType === "exit") {
-        if (isTest || exitImmediateToggle.checked) {
-          executeActionByCode(exitSoundSelect.value, isTest, isTest ? "【退出テスト】" : `⬅ ${nameTag}退出: `);
+        if (isTest) {
+          executeActionByCode(exitSoundSelect.value, true, "【退出テスト】");
+          return;
+        }
+
+        // 退出時は人数カウントに関係なく毎回鳴らす（または設定に応じて）
+        if (exitImmediateToggle.checked) {
+          executeActionByCode(exitSoundSelect.value, false, `⬅ ${nameTag}帰宅・退出: `);
         } else {
           currentCount++;
           currentCountEl.textContent = currentCount;
           if (currentCount >= targetCount) {
-            executeActionByCode(exitSoundSelect.value, false, `⬅ ${nameTag}退出: `);
+            executeActionByCode(exitSoundSelect.value, false, `⬅ ${nameTag}帰宅・退出: `);
             currentCount = 0;
             currentCountEl.textContent = "0";
           } else {
@@ -2382,7 +2757,7 @@
     async function startCameraHardware() {
       if (isCameraActive) return;
       try {
-        systemStatus.textContent = "📷 カメラと顔認証AIを起動しています...";
+        systemStatus.textContent = "📷 カメラと顔・服装認識AIを起動しています...";
         systemStatus.style.color = "#38bdf8";
 
         mediaStream = await navigator.mediaDevices.getUserMedia({
@@ -2400,6 +2775,7 @@
         trackLastX = null;
         trackTriggeredThisPass = false;
         trackVerifiedNameThisPass = null;
+        trackPeakOutfitSample = null;
         updateCameraButtonsUI();
         if (currentPlayingIndex === -1) {
           restoreIdleStatus();
@@ -2468,7 +2844,7 @@
     });
 
     // ==========================================
-    // カウント音用 Web Audio API（タイミング指定対応）
+    // カウント音用 Web Audio API（曲ごとの個別設定対応）
     // ==========================================
     let audioCtx = null;
     function ensureAudioContext() {
@@ -2481,8 +2857,34 @@
       }
     }
 
-    function playSingleCountBeep(isFinal = false) {
-      if (countSoundDurationSec <= 0 || countSoundVol <= 0) return;
+    function getEffectiveCountParams(song) {
+      if (!song || !song.countMode || song.countMode === "global") {
+        return {
+          mode: savedCountConfig.timingMode || "end",
+          offsetSec: savedCountConfig.offsetSec || 0,
+          durationSec: countSoundDurationSec,
+          bpm: countBpm,
+          soundMode: countSoundMode,
+          volume: countSoundVol
+        };
+      }
+      return {
+        mode: song.countMode,
+        offsetSec: song.countOffsetSec || 0,
+        durationSec: typeof song.countDurationSec === "number" ? song.countDurationSec : 5,
+        bpm: typeof song.countBpm === "number" ? song.countBpm : 120,
+        soundMode: song.countSoundType || "beep",
+        volume: (typeof song.countVolume === "number" ? song.countVolume : 70) / 100
+      };
+    }
+
+    function playSingleCountBeep(isFinal = false, overrideParams = null) {
+      const durSec = overrideParams ? overrideParams.durationSec : countSoundDurationSec;
+      const vol = overrideParams ? overrideParams.volume : countSoundVol;
+      const bpm = overrideParams ? overrideParams.bpm : countBpm;
+      const sMode = overrideParams ? overrideParams.soundMode : countSoundMode;
+
+      if (durSec <= 0 || vol <= 0) return;
       ensureAudioContext();
       if (!audioCtx) return;
 
@@ -2492,26 +2894,26 @@
       osc.connect(gain);
       gain.connect(audioCtx.destination);
 
-      const peakGain = countSoundVol * 0.55;
-      const beatSec = 60 / countBpm;
+      const peakGain = vol * 0.55;
+      const beatSec = 60 / bpm;
       const maxDur = Math.min(0.35, beatSec * 0.75);
       const dur = isFinal ? Math.max(0.22, maxDur) : Math.min(0.14, beatSec * 0.55);
 
-      if (countSoundMode === "beep") {
+      if (sMode === "beep") {
         osc.type = "sine";
         osc.frequency.setValueAtTime(isFinal ? 1318.5 : 880, now);
         gain.gain.setValueAtTime(peakGain, now);
         gain.gain.exponentialRampToValueAtTime(0.001, now + dur);
         osc.start(now);
         osc.stop(now + dur + 0.02);
-      } else if (countSoundMode === "chime") {
+      } else if (sMode === "chime") {
         osc.type = "triangle";
         osc.frequency.setValueAtTime(isFinal ? 1046.5 : 784.0, now);
         gain.gain.setValueAtTime(peakGain, now);
         gain.gain.exponentialRampToValueAtTime(0.001, now + (isFinal ? Math.max(0.3, maxDur) : Math.min(0.24, beatSec * 0.7)));
         osc.start(now);
         osc.stop(now + (isFinal ? Math.max(0.32, maxDur + 0.02) : Math.min(0.26, beatSec * 0.72)));
-      } else if (countSoundMode === "pop") {
+      } else if (sMode === "pop") {
         osc.type = "sine";
         osc.frequency.setValueAtTime(isFinal ? 660 : 440, now);
         osc.frequency.exponentialRampToValueAtTime(isFinal ? 1320 : 880, now + Math.min(0.1, dur));
@@ -2533,48 +2935,47 @@
       }
     }
 
-    function schedulePlaybackCountSound(songDurationSec, songTitle) {
+    function schedulePlaybackCountSound(songDurationSec, song) {
       clearCountSoundTimers();
-      if (countSoundDurationSec <= 0 || countSoundVol <= 0) return;
+      const params = getEffectiveCountParams(song);
+      if (params.mode === "off" || params.durationSec <= 0 || params.volume <= 0) return;
 
-      const mode = savedCountConfig.timingMode || "end";
       let delayMs = 0;
-      let activeWindowSec = countSoundDurationSec;
+      let activeWindowSec = params.durationSec;
 
-      if (mode === "start") {
+      if (params.mode === "start") {
         delayMs = 0;
-        if (songDurationSec > 0 && songDurationSec < countSoundDurationSec) {
+        if (songDurationSec > 0 && songDurationSec < params.durationSec) {
           activeWindowSec = songDurationSec;
         }
-      } else if (mode === "custom_sec") {
-        const offsetSec = savedCountConfig.offsetSec || 0;
-        delayMs = offsetSec * 1000;
+      } else if (params.mode === "custom_sec") {
+        delayMs = params.offsetSec * 1000;
         if (songDurationSec > 0) {
-          if (offsetSec >= songDurationSec) return;
-          activeWindowSec = Math.min(countSoundDurationSec, songDurationSec - offsetSec);
+          if (params.offsetSec >= songDurationSec) return;
+          activeWindowSec = Math.min(params.durationSec, songDurationSec - params.offsetSec);
         }
       } else {
         if (songDurationSec > 0) {
-          if (songDurationSec > countSoundDurationSec) {
-            delayMs = (songDurationSec - countSoundDurationSec) * 1000;
+          if (songDurationSec > params.durationSec) {
+            delayMs = (songDurationSec - params.durationSec) * 1000;
           } else {
             activeWindowSec = songDurationSec;
           }
         }
       }
 
-      const beatIntervalMs = (60 / countBpm) * 1000;
-      const totalBeats = Math.max(1, Math.round(activeWindowSec * (countBpm / 60)));
+      const beatIntervalMs = (60 / params.bpm) * 1000;
+      const totalBeats = Math.max(1, Math.round(activeWindowSec * (params.bpm / 60)));
 
       countStartTimerId = setTimeout(() => {
         let beatCount = 0;
         const tick = () => {
           beatCount++;
           const isFinal = beatCount >= totalBeats;
-          playSingleCountBeep(isFinal);
+          playSingleCountBeep(isFinal, params);
 
           if (!isFinal) {
-            systemStatus.textContent = `🥁 カウント中（${countBpm} BPM / ${beatCount}/${totalBeats}拍）: ${songTitle}`;
+            systemStatus.textContent = `🥁 カウント中（${params.bpm} BPM / ${beatCount}/${totalBeats}拍）: ${song.title}`;
             systemStatus.style.color = "#f59e0b";
           }
 
@@ -2752,8 +3153,20 @@
       return sec === 0 ? "最後まで" : `${sec}秒間`;
     }
 
+    function formatSongCountSummary(song) {
+      const p = getEffectiveCountParams(song);
+      if (p.mode === "off" || p.durationSec <= 0 || p.volume <= 0) {
+        return "🔇 カウントなし";
+      }
+      let posLabel = "最後";
+      if (p.mode === "start") posLabel = "最初から";
+      else if (p.mode === "custom_sec") posLabel = `${p.offsetSec}秒後から`;
+      else posLabel = `ラスト${p.durationSec}秒`;
+      return `⏱️ ${posLabel} (${p.durationSec}秒 / ${p.bpm}BPM)`;
+    }
+
     // ==========================================
-    // 曲リスト描画
+    // 曲リスト描画（曲ごとの個別カウント音設定付き）
     // ==========================================
     function renderAllSongLists(playingIdx = currentPlayingIndex) {
       populateDirectionActionSelects();
@@ -2771,6 +3184,7 @@
         const hasHighlight = item.highlightEnd > item.highlightStart;
         const isGithubLocal = isGitHubRelativePath(item.url);
         const isDropbox = item.url.includes("dropbox.com");
+        const countSummary = formatSongCountSummary(item);
 
         const mainItem = document.createElement("div");
         mainItem.className = "main-song-item" + (idx === playingIdx ? " playing" : "");
@@ -2781,9 +3195,9 @@
               ${isGithubLocal ? `<span class="meta-tag github">📁 GitHub直下</span>` : ""}
               ${isDropbox ? `<span class="meta-tag github">📦 Dropbox</span>` : ""}
               <span class="meta-tag">⏱️ ${formatDurationLabel(item.duration)}</span>
+              <span class="meta-tag count-tag">${escapeHtml(countSummary)}</span>
               <span class="meta-tag">🔉 通常${item.baseVolume}%</span>
               ${hasHighlight ? `<span class="meta-tag accent">🔥 ${item.highlightStart}〜${item.highlightEnd}秒は${item.peakVolume}%</span>` : ""}
-              ${(item.fadeIn > 0 || item.fadeOut > 0) ? `<span class="meta-tag">📈 IN:${item.fadeIn}s / OUT:${item.fadeOut}s</span>` : ""}
             </div>
           </div>
           <span class="play-pill">${idx === playingIdx ? "🎵 再生中" : "▶ 試聴"}</span>
@@ -2815,7 +3229,7 @@
         const playBtn = document.createElement("button");
         playBtn.type = "button";
         playBtn.className = "mini-btn mini-play";
-        playBtn.textContent = "▶ 試聴";
+        playBtn.textContent = "▶ 曲試聴";
         playBtn.addEventListener("click", () => playSpecificSong(idx, true));
 
         const delBtn = document.createElement("button");
@@ -2859,6 +3273,153 @@
           }
         ));
         setCard.appendChild(durRow);
+
+        const countBox = document.createElement("div");
+        countBox.className = "sub-box";
+
+        const countHeader = document.createElement("div");
+        countHeader.style.display = "flex";
+        countHeader.style.alignItems = "center";
+        countHeader.style.justifyContent = "space-between";
+        countHeader.innerHTML = `<div class="sub-box-title count-title">🥁 この曲のカウント音設定</div>`;
+
+        const testSongCountBtn = document.createElement("button");
+        testSongCountBtn.type = "button";
+        testSongCountBtn.className = "mini-btn mini-test-cnt";
+        testSongCountBtn.textContent = "▶ カウント試聴";
+        testSongCountBtn.addEventListener("click", () => {
+          previewCountParams(getEffectiveCountParams(item));
+        });
+        countHeader.appendChild(testSongCountBtn);
+        countBox.appendChild(countHeader);
+
+        const cModeRow = document.createElement("div");
+        cModeRow.style.display = "flex";
+        cModeRow.style.alignItems = "center";
+        cModeRow.style.justifyContent = "space-between";
+        cModeRow.style.fontSize = "0.8rem";
+        cModeRow.innerHTML = `<span>鳴らすタイミング:</span>`;
+
+        const cModeSel = document.createElement("select");
+        cModeSel.className = "select-input";
+        cModeSel.innerHTML = `
+          <option value="global"${item.countMode === "global" ? " selected" : ""}>全体共通設定を使う</option>
+          <option value="end"${item.countMode === "end" ? " selected" : ""}>曲が終わる直前（最後から）</option>
+          <option value="start"${item.countMode === "start" ? " selected" : ""}>曲が始まってすぐ（最初から）</option>
+          <option value="custom_sec"${item.countMode === "custom_sec" ? " selected" : ""}>開始から指定秒数後に鳴らす</option>
+          <option value="off"${item.countMode === "off" ? " selected" : ""}>鳴らさない（OFF）</option>
+        `;
+        cModeSel.addEventListener("change", () => {
+          item.countMode = cModeSel.value;
+          saveSongs();
+          renderAllSongLists();
+        });
+        cModeRow.appendChild(cModeSel);
+        countBox.appendChild(cModeRow);
+
+        if (item.countMode !== "global" && item.countMode !== "off") {
+          if (item.countMode === "custom_sec") {
+            const cOffRow = document.createElement("div");
+            cOffRow.style.display = "flex";
+            cOffRow.style.alignItems = "center";
+            cOffRow.style.justifyContent = "space-between";
+            cOffRow.style.fontSize = "0.8rem";
+            cOffRow.innerHTML = `<span>開始から何秒後:</span>`;
+            cOffRow.appendChild(createStepperControl(
+              `${item.countOffsetSec}秒後`,
+              () => {
+                item.countOffsetSec = Math.max(0, (item.countOffsetSec || 0) - 1);
+                saveSongs();
+                renderAllSongLists();
+              },
+              () => {
+                item.countOffsetSec = Math.min(300, (item.countOffsetSec || 0) + 1);
+                saveSongs();
+                renderAllSongLists();
+              }
+            ));
+            countBox.appendChild(cOffRow);
+          }
+
+          const cDurRow = document.createElement("div");
+          cDurRow.style.display = "flex";
+          cDurRow.style.alignItems = "center";
+          cDurRow.style.justifyContent = "space-between";
+          cDurRow.style.fontSize = "0.8rem";
+          cDurRow.innerHTML = `<span>鳴らす長さ:</span>`;
+          cDurRow.appendChild(createStepperControl(
+            `${item.countDurationSec}秒間`,
+            () => {
+              let cIdx = COUNT_DURATION_STEPS.indexOf(item.countDurationSec);
+              if (cIdx === -1) cIdx = 5;
+              if (cIdx > 1) {
+                item.countDurationSec = COUNT_DURATION_STEPS[cIdx - 1];
+                saveSongs();
+                renderAllSongLists();
+              }
+            },
+            () => {
+              let cIdx = COUNT_DURATION_STEPS.indexOf(item.countDurationSec);
+              if (cIdx === -1) cIdx = 5;
+              if (cIdx < COUNT_DURATION_STEPS.length - 1) {
+                item.countDurationSec = COUNT_DURATION_STEPS[cIdx + 1];
+                saveSongs();
+                renderAllSongLists();
+              }
+            }
+          ));
+          countBox.appendChild(cDurRow);
+
+          const cBpmRow = document.createElement("div");
+          cBpmRow.style.display = "flex";
+          cBpmRow.style.alignItems = "center";
+          cBpmRow.style.justifyContent = "space-between";
+          cBpmRow.style.fontSize = "0.8rem";
+          cBpmRow.innerHTML = `<span>速さ (BPM):</span>`;
+          cBpmRow.appendChild(createStepperControl(
+            `${item.countBpm} BPM`,
+            () => {
+              item.countBpm = Math.max(40, (item.countBpm || 120) - 5);
+              saveSongs();
+              renderAllSongLists();
+            },
+            () => {
+              item.countBpm = Math.min(240, (item.countBpm || 120) + 5);
+              saveSongs();
+              renderAllSongLists();
+            }
+          ));
+          countBox.appendChild(cBpmRow);
+
+          const cTypeRow = document.createElement("div");
+          cTypeRow.style.display = "flex";
+          cTypeRow.style.alignItems = "center";
+          cTypeRow.style.justifyContent = "space-between";
+          cTypeRow.style.fontSize = "0.8rem";
+          cTypeRow.innerHTML = `<span>音の種類:</span>`;
+
+          const cTypeSel = document.createElement("select");
+          cTypeSel.className = "select-input";
+          cTypeSel.innerHTML = `
+            <option value="beep"${item.countSoundType === "beep" ? " selected" : ""}>ピッ（電子音）</option>
+            <option value="chime"${item.countSoundType === "chime" ? " selected" : ""}>ポーン（チャイム風）</option>
+            <option value="pop"${item.countSoundType === "pop" ? " selected" : ""}>ポッ（ソフト音）</option>
+          `;
+          cTypeSel.addEventListener("change", () => {
+            item.countSoundType = cTypeSel.value;
+            saveSongs();
+            playSingleCountBeep(false, getEffectiveCountParams(item));
+          });
+          cTypeRow.appendChild(cTypeSel);
+          countBox.appendChild(cTypeRow);
+
+          countBox.appendChild(createVolumeSliderRow("🔊 カウント音量:", item.countVolume, "#34d399", (v) => {
+            item.countVolume = v;
+            saveSongs();
+          }));
+        }
+
+        setCard.appendChild(countBox);
 
         const fiRow = document.createElement("div");
         fiRow.className = "per-song-ctrl";
@@ -3048,7 +3609,7 @@
         const fileName = decodeURIComponent(cleanPath.substring(cleanPath.lastIndexOf("/") + 1));
         title = fileName || `登録曲 ${songList.length + 1}`;
       }
-      songList.push({
+      songList.push(normalizeSongObject({
         title,
         url: normalizedUrl,
         baseVolume: 80,
@@ -3057,8 +3618,14 @@
         highlightEnd: 0,
         fadeIn: 0.5,
         fadeOut: 1.5,
-        duration: 0
-      });
+        duration: 0,
+        countMode: "global",
+        countOffsetSec: 0,
+        countDurationSec: 5,
+        countBpm: 120,
+        countSoundType: "beep",
+        countVolume: 70
+      }));
       newTitleInput.value = "";
       newUrlInput.value = "";
       saveSongs();
@@ -3072,11 +3639,11 @@
       if (isCameraActive) {
         if (savedFaceConfig.enabled) {
           systemStatus.textContent = registeredFaces.length > 0
-            ? `👤 顔認証待機中（登録済み ${registeredFaces.length}件のみ反応）`
+            ? `👤 顔認証＋服装記憶待機中（登録顔 ${registeredFaces.length}件 / 帰宅待ち ${activeEntryOutfits.length}名）`
             : "⚠️ 顔認証ONですが顔が未登録です（「☰ ➔ 👤 顔認証設定」から登録）";
           systemStatus.style.color = registeredFaces.length > 0 ? "#38bdf8" : "#f59e0b";
         } else {
-          systemStatus.textContent = "👀 入退出の通過を待機中（全員反応モード）";
+          systemStatus.textContent = `👀 入退出＋服装照合を待機中（帰宅待ち ${activeEntryOutfits.length}名）`;
           systemStatus.style.color = "#38bdf8";
         }
       } else {
@@ -3136,7 +3703,7 @@
         const effectiveDur = targetSong.duration > 0
           ? targetSong.duration
           : (Number.isFinite(audioPlayer.duration) && audioPlayer.duration > 0 ? audioPlayer.duration : 0);
-        schedulePlaybackCountSound(effectiveDur, targetSong.title);
+        schedulePlaybackCountSound(effectiveDur, targetSong);
 
         if (targetSong.duration > 0) {
           stopTimerId = setTimeout(() => {
@@ -3280,23 +3847,23 @@
     });
 
     let testCountTimer = null;
-    testCountSoundBtn.addEventListener("click", () => {
+    function previewCountParams(params) {
       if (testCountTimer) {
         clearInterval(testCountTimer);
         testCountTimer = null;
       }
-      if (countSoundDurationSec <= 0) {
-        playSingleCountBeep(true);
+      if (params.mode === "off" || params.durationSec <= 0) {
+        playSingleCountBeep(true, { ...params, durationSec: 1, volume: Math.max(0.5, params.volume) });
         return;
       }
-      const beatIntervalMs = (60 / countBpm) * 1000;
-      const totalBeats = Math.max(1, Math.round(countSoundDurationSec * (countBpm / 60)));
+      const beatIntervalMs = (60 / params.bpm) * 1000;
+      const totalBeats = Math.max(1, Math.round(params.durationSec * (params.bpm / 60)));
       let step = 0;
 
       const runTest = () => {
         step++;
         const isFinal = step >= totalBeats;
-        playSingleCountBeep(isFinal);
+        playSingleCountBeep(isFinal, params);
         if (isFinal && testCountTimer) {
           clearInterval(testCountTimer);
           testCountTimer = null;
@@ -3307,6 +3874,17 @@
       if (totalBeats > 1) {
         testCountTimer = setInterval(runTest, beatIntervalMs);
       }
+    }
+
+    testCountSoundBtn.addEventListener("click", () => {
+      previewCountParams({
+        mode: countTimingMode.value,
+        offsetSec: savedCountConfig.offsetSec || 0,
+        durationSec: countSoundDurationSec,
+        bpm: countBpm,
+        soundMode: countSoundMode,
+        volume: countSoundVol
+      });
     });
 
     stopMusicBtn.addEventListener("click", () => {
@@ -3393,7 +3971,7 @@
     }
 
     // ==========================================
-    // メイン検出ループ
+    // メイン検出ループ（入室時の服装記憶 ＋ 退出時の服装・荷物照合）
     // ==========================================
     async function detectLoop() {
       if (!isCameraActive || !personModel) return;
@@ -3427,15 +4005,35 @@
             trackVerifiedNameThisPass = (lastMatchedFaceName && now - lastMatchedTime <= 2000)
               ? lastMatchedFaceName
               : null;
+            trackPeakOutfitSample = null;
           }
 
           runFaceRecognitionStep();
 
-          const verifiedName = trackVerifiedNameThisPass || ((lastMatchedFaceName && now - lastMatchedTime <= 2500) ? lastMatchedFaceName : null);
-          if (verifiedName && !trackVerifiedNameThisPass) {
-            trackVerifiedNameThisPass = verifiedName;
+          persons.sort((a, b) => (b.bbox[2] * b.bbox[3]) - (a.bbox[2] * a.bbox[3]));
+          const mainPerson = persons[0];
+          const [mx, my, mw, mh] = mainPerson.bbox;
+
+          // 通過中の服装・荷物特徴を更新（一番大きく鮮明に映ったフレームを保持）
+          const currentSample = extractOutfitSignature(webcamVideo, mainPerson.bbox, vw, vh);
+          if (currentSample) {
+            if (!trackPeakOutfitSample || currentSample.area >= trackPeakOutfitSample.area * 0.85) {
+              trackPeakOutfitSample = currentSample;
+            }
           }
-          const isVerifiedNow = !savedFaceConfig.enabled || Boolean(verifiedName);
+
+          const verifiedFaceName = trackVerifiedNameThisPass || ((lastMatchedFaceName && now - lastMatchedTime <= 2500) ? lastMatchedFaceName : null);
+          if (verifiedFaceName && !trackVerifiedNameThisPass) {
+            trackVerifiedNameThisPass = verifiedFaceName;
+          }
+
+          // 服装・荷物記憶とのリアルタイム照合（帰宅判定用）
+          const outfitCheck = (savedOutfitConfig.enabled && (trackPeakOutfitSample || currentSample))
+            ? findMatchingEntryOutfit(trackPeakOutfitSample || currentSample)
+            : null;
+          const isOutfitMatched = Boolean(outfitCheck && outfitCheck.isMatch);
+
+          const isVerifiedNow = !savedFaceConfig.enabled || Boolean(verifiedFaceName) || isOutfitMatched;
 
           if (isVerifiedNow) {
             cameraPipWrapper.classList.add("person-active");
@@ -3445,9 +4043,6 @@
             cameraPipWrapper.classList.add("person-unverified");
           }
 
-          persons.sort((a, b) => (b.bbox[2] * b.bbox[3]) - (a.bbox[2] * a.bbox[3]));
-          const mainPerson = persons[0];
-
           persons.forEach((p, idx) => {
             const [x, y, w, h] = p.bbox;
             ctx.strokeStyle = isVerifiedNow ? "#10b981" : "#f59e0b";
@@ -3455,9 +4050,7 @@
             ctx.strokeRect(x, y, w, h);
           });
 
-          const [mx, my, mw, mh] = mainPerson.bbox;
           const centerXNorm = (mx + mw / 2) / vw;
-
           ctx.fillStyle = isVerifiedNow ? "#10b981" : "#f59e0b";
           ctx.beginPath();
           ctx.arc(mx + mw / 2, my + mh / 2, 7, 0, Math.PI * 2);
@@ -3471,22 +4064,65 @@
           const deltaX = currentFacingMode === "user" ? -rawDeltaX : rawDeltaX;
 
           if (!trackTriggeredThisPass && Math.abs(deltaX) >= savedWalkConfig.moveRatio) {
-            if (isVerifiedNow) {
-              if (now - lastTriggerTime >= cooldownSec * 1000) {
-                lastTriggerTime = now;
-                trackTriggeredThisPass = true;
+            const movedLeftToRight = deltaX > 0;
+            const isEnter = enterDirectionSelect.value === "left_to_right"
+              ? movedLeftToRight
+              : !movedLeftToRight;
 
-                const movedLeftToRight = deltaX > 0;
-                const isEnter = enterDirectionSelect.value === "left_to_right"
-                  ? movedLeftToRight
-                  : !movedLeftToRight;
-
-                const authName = savedFaceConfig.enabled ? (verifiedName || "") : "";
-                handlePersonDirectionEvent(isEnter ? "enter" : "exit", false, authName);
+            if (isEnter) {
+              // ★ 入室方向（行き）：顔認証（ON時）が通れば入室カウント＋服装・荷物を自動記憶
+              const canEnter = !savedFaceConfig.enabled || Boolean(verifiedFaceName);
+              if (canEnter) {
+                if (now - lastTriggerTime >= cooldownSec * 1000) {
+                  lastTriggerTime = now;
+                  trackTriggeredThisPass = true;
+                  const authName = savedFaceConfig.enabled ? (verifiedFaceName || "") : "";
+                  handlePersonDirectionEvent("enter", false, authName, trackPeakOutfitSample || currentSample);
+                }
+              } else if (currentPlayingIndex === -1) {
+                systemStatus.textContent = "🔍 入室検知中... 顔認証を確認しています";
+                systemStatus.style.color = "#f59e0b";
               }
             } else {
-              if (currentPlayingIndex === -1) {
-                systemStatus.textContent = "🔍 通過検知中... 顔認証を確認しています";
+              // ★ 退出方向（帰り）：
+              // 1) 行きの服装・荷物記憶と一致した場合、または
+              // 2) 顔認証が一致した場合、または
+              // 3) 服装照合も顔認証もOFFの場合 に「帰宅」と判定して毎回音を鳴らす
+              const hasMemoryList = savedOutfitConfig.enabled && activeEntryOutfits.length > 0;
+              let canExit = false;
+              let exitLabelName = verifiedFaceName || "";
+
+              if (hasMemoryList) {
+                if (isOutfitMatched) {
+                  canExit = true;
+                  const pctScore = Math.round(outfitCheck.similarity * 100);
+                  exitLabelName = `${outfitCheck.item.label}・服装一致${pctScore}%`;
+                  // 帰宅完了した人の服装記憶を1件消化する
+                  activeEntryOutfits.splice(outfitCheck.index, 1);
+                  renderOutfitMemoryList();
+                  scheduleCloudPush();
+                } else if (verifiedFaceName) {
+                  canExit = true;
+                  const memIdx = activeEntryOutfits.findIndex(o => o.label === verifiedFaceName);
+                  if (memIdx !== -1) {
+                    activeEntryOutfits.splice(memIdx, 1);
+                    renderOutfitMemoryList();
+                    scheduleCloudPush();
+                  }
+                }
+              } else {
+                canExit = !savedFaceConfig.enabled || Boolean(verifiedFaceName);
+              }
+
+              if (canExit) {
+                if (now - lastTriggerTime >= cooldownSec * 1000) {
+                  lastTriggerTime = now;
+                  trackTriggeredThisPass = true;
+                  handlePersonDirectionEvent("exit", false, exitLabelName, null);
+                }
+              } else if (currentPlayingIndex === -1) {
+                const simText = outfitCheck ? `（現在の服装一致率 ${Math.round(outfitCheck.similarity * 100)}%）` : "";
+                systemStatus.textContent = `🔍 退出方向を通過... 行きの服装・荷物と照合中${simText}`;
                 systemStatus.style.color = "#f59e0b";
               }
             }
@@ -3494,13 +4130,14 @@
         } else {
           cameraPipWrapper.classList.remove("person-active", "person-unverified");
           if (trackStartX !== null && now - trackLastSeenTime > savedWalkConfig.holdMs) {
-            if (!trackTriggeredThisPass && savedFaceConfig.enabled && currentPlayingIndex === -1) {
+            if (!trackTriggeredThisPass && currentPlayingIndex === -1) {
               restoreIdleStatus();
             }
             trackStartX = null;
             trackLastX = null;
             trackTriggeredThisPass = false;
             trackVerifiedNameThisPass = null;
+            trackPeakOutfitSample = null;
           }
         }
       }
@@ -3512,7 +4149,7 @@
 
     startBtn.addEventListener("click", async () => {
       startBtn.disabled = true;
-      loadingMsg.textContent = "カメラ・人物検知AI・高精度顔認証AIを準備しています...";
+      loadingMsg.textContent = "カメラ・人物検知AI・顔＆服装認識AIを準備しています...";
 
       try {
         ensureAudioContext();
