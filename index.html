@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <title>顔認証・入退出サウンドシステム（クラウド同期・詳細カウント設定対応）</title>
+  <title>顔認証・入退出サウンドシステム（クラウド同期・コンマ秒カウント設定対応）</title>
 
   <!-- TensorFlow.js & COCO-SSD（人物検知・通過方向判定AI） -->
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.17.0/dist/tf.min.js"></script>
@@ -708,7 +708,7 @@
     .num-control {
       display: flex;
       align-items: center;
-      gap: 6px;
+      gap: 5px;
     }
 
     .step-btn {
@@ -721,6 +721,7 @@
       font-size: 1rem;
       font-weight: bold;
       cursor: pointer;
+      flex-shrink: 0;
     }
 
     .val-badge {
@@ -849,13 +850,14 @@
     }
 
     .sec-num-input {
-      width: 64px;
+      width: 72px;
       background: #0f172a;
       border: 1px solid #475569;
       color: #f8fafc;
       padding: 5px 6px;
       border-radius: 8px;
       font-size: 0.82rem;
+      font-weight: bold;
       text-align: center;
     }
 
@@ -905,7 +907,7 @@
       <span>👤</span><span>顔認証設定（全端末共有）</span>
     </button>
     <button class="nav-item-btn" data-target="settingsScreen" type="button">
-      <span>⚙️</span><span>設定（帰宅照合・カウント詳細・曲）</span>
+      <span>⚙️</span><span>設定（帰宅照合・コンマ秒カウント・曲）</span>
     </button>
   </nav>
 
@@ -1152,36 +1154,36 @@
         </div>
       </div>
 
-      <!-- ★ 曲再生中に流れるカウント音の詳細設定（全体共通） -->
+      <!-- ★ 曲再生中に流れるカウント音の詳細設定（0.01秒・コンマ単位対応） -->
       <div class="card">
         <div style="display: flex; justify-content: space-between; align-items: center;">
-          <span style="font-size: 0.95rem; font-weight: bold; color: #34d399;">⏱️ カウント音の詳細設定（全体基本・各曲で個別上書き可）</span>
+          <span style="font-size: 0.95rem; font-weight: bold; color: #34d399;">⏱️ カウント音の詳細設定（0.01秒コンマ単位）</span>
           <button class="mini-btn mini-play" id="testCountSoundBtn" type="button">▶ 試聴</button>
         </div>
 
         <!-- ワンタッププリセット -->
         <div class="preset-chip-row">
-          <button type="button" class="preset-chip" data-cnt-preset="last3">🏁 ラスト3秒カウント</button>
-          <button type="button" class="preset-chip" data-cnt-preset="last5_fast">⚡ ラスト5秒(速め)</button>
-          <button type="button" class="preset-chip" data-cnt-preset="intro4">🎬 開始直後4拍</button>
-          <button type="button" class="preset-chip" data-cnt-preset="chime3">🔔 1秒おき3回チャイム</button>
+          <button type="button" class="preset-chip" data-cnt-preset="last3">🏁 ラスト3.00秒</button>
+          <button type="button" class="preset-chip" data-cnt-preset="last5_fast">⚡ 0.40秒おき5秒</button>
+          <button type="button" class="preset-chip" data-cnt-preset="intro4">🎬 開始0.00秒〜4拍</button>
+          <button type="button" class="preset-chip" data-cnt-preset="chime3">🔔 1.00秒おき3回</button>
         </div>
 
         <div class="ctrl-row">
           <span>📍 鳴らす基準位置:</span>
           <select id="countTimingMode" class="select-input">
             <option value="end">曲が終わる直前（最後から逆算）</option>
-            <option value="start">曲が始まってすぐ（0.0秒から）</option>
-            <option value="custom_sec">開始から指定秒数後に開始</option>
-            <option value="before_end_sec">終了の指定秒数前に終了</option>
+            <option value="start">曲が始まってすぐ（0.00秒から）</option>
+            <option value="custom_sec">開始から指定コンマ秒後に開始</option>
+            <option value="before_end_sec">終了の指定コンマ秒前に終了</option>
           </select>
         </div>
 
         <div class="ctrl-row" id="countCustomOffsetRow" style="display: none;">
-          <span id="countOffsetLabel">⏱️ 開始からの秒数 (0.1秒単位):</span>
+          <span id="countOffsetLabel">⏱️ 開始からの秒数 (0.01秒):</span>
           <div class="num-control">
             <button class="step-btn" id="countOffsetMinusBtn" type="button">−</button>
-            <input type="number" id="countOffsetNumberInput" class="sec-num-input" min="0" max="300" step="0.1" value="0.0" />
+            <input type="number" id="countOffsetNumberInput" class="sec-num-input" min="0" max="300" step="0.01" value="0.00" />
             <span style="font-size:0.78rem; color:#94a3b8;">秒</span>
             <button class="step-btn" id="countOffsetPlusBtn" type="button">＋</button>
           </div>
@@ -1190,16 +1192,16 @@
         <div class="ctrl-row">
           <span>🔢 長さ・回数の決め方:</span>
           <select id="countLengthMode" class="select-input">
-            <option value="seconds">秒数で指定（〇.〇秒間）</option>
+            <option value="seconds">秒数で指定（〇.〇〇秒間）</option>
             <option value="beats">回数で指定（ちょうど〇回鳴らす）</option>
           </select>
         </div>
 
         <div class="ctrl-row" id="countDurSecRow">
-          <span>⏳ カウントを鳴らす長さ:</span>
+          <span>⏳ 鳴らす全体の長さ (0.01秒):</span>
           <div class="num-control">
             <button class="step-btn" id="countDurMinusBtn" type="button">−</button>
-            <input type="number" id="countDurNumberInput" class="sec-num-input" min="0" max="120" step="0.5" value="5" />
+            <input type="number" id="countDurNumberInput" class="sec-num-input" min="0" max="120" step="0.01" value="5.00" />
             <span style="font-size:0.78rem; color:#94a3b8;">秒</span>
             <button class="step-btn" id="countDurPlusBtn" type="button">＋</button>
           </div>
@@ -1217,12 +1219,22 @@
         <div class="ctrl-row">
           <span>🎼 テンポ（間隔）の指定方法:</span>
           <select id="countTempoUnit" class="select-input">
+            <option value="interval_sec">コンマ秒間隔（〇.〇〇秒おき）</option>
             <option value="bpm">BPM（1分間の拍数）</option>
-            <option value="interval_sec">秒間隔（〇.〇秒ごとに1回）</option>
           </select>
         </div>
 
-        <div id="countBpmControlBlock" style="display: flex; flex-direction: column; gap: 6px;">
+        <div class="ctrl-row" id="countIntervalSecRow">
+          <span>⏱️ 1回ごとの間隔 (0.01秒):</span>
+          <div class="num-control">
+            <button class="step-btn" id="intervalSecMinusBtn" type="button">−</button>
+            <input type="number" id="intervalSecNumberInput" class="sec-num-input" min="0.05" max="10" step="0.01" value="1.00" />
+            <span style="font-size:0.78rem; color:#94a3b8;">秒</span>
+            <button class="step-btn" id="intervalSecPlusBtn" type="button">＋</button>
+          </div>
+        </div>
+
+        <div id="countBpmControlBlock" style="display: none; flex-direction: column; gap: 6px;">
           <div class="ctrl-row">
             <span>🥁 カウントの速さ (BPM):</span>
             <div class="num-control">
@@ -1234,15 +1246,6 @@
           <div class="ctrl-row">
             <span style="font-size: 0.76rem; color: #94a3b8; white-space: nowrap;">BPM微調整:</span>
             <input type="range" id="bpmSlider" min="30" max="240" value="120" />
-          </div>
-        </div>
-
-        <div class="ctrl-row" id="countIntervalSecRow" style="display: none;">
-          <span>⏱️ 1回ごとの間隔（0.1秒刻み）:</span>
-          <div class="num-control">
-            <button class="step-btn" id="intervalSecMinusBtn" type="button">−</button>
-            <span class="val-badge" id="intervalSecDisplay">1.0秒おき</span>
-            <button class="step-btn" id="intervalSecPlusBtn" type="button">＋</button>
           </div>
         </div>
 
@@ -1262,9 +1265,9 @@
           <input type="text" id="countCustomAudioUrlInput" class="text-input" placeholder="カウント用音声ファイル名（例: ./count.mp3 や Dropboxリンク）" />
         </div>
 
-        <!-- 音の高さ（Hz）・最後の1拍変化・1音の長さ -->
+        <!-- 音の高さ（Hz）・最後の1拍変化・1音の長さ（0.01秒単位） -->
         <div id="countSynthDetailBox" class="sub-box">
-          <div class="sub-box-title count-title">🎛️ 音程（Hz）・最後の1拍（フィニッシュ音）の微調整</div>
+          <div class="sub-box-title count-title">🎛️ 音程（Hz）・最後の1拍・1音の長さ（コンマ秒）</div>
 
           <div class="ctrl-row">
             <span>🎵 通常の高さ:</span>
@@ -1279,12 +1282,13 @@
           </div>
 
           <div class="ctrl-row">
-            <span>📏 1音あたりの長さ:</span>
-            <select id="countNoteLengthSelect" class="select-input">
-              <option value="short">短め（歯切れよいピッ）</option>
-              <option value="normal" selected>標準</option>
-              <option value="long">長め（余韻あり）</option>
-            </select>
+            <span>📏 1音あたりの鳴る長さ:</span>
+            <div class="num-control">
+              <button class="step-btn" id="noteDurMinusBtn" type="button">−</button>
+              <input type="number" id="noteDurNumberInput" class="sec-num-input" min="0.03" max="2.00" step="0.01" value="0.13" />
+              <span style="font-size:0.78rem; color:#94a3b8;">秒</span>
+              <button class="step-btn" id="noteDurPlusBtn" type="button">＋</button>
+            </div>
           </div>
         </div>
 
@@ -1297,9 +1301,9 @@
 
       <!-- 外部リンクURL・GitHubファイル追加＆1曲ごとの個別設定 -->
       <div class="card">
-        <div style="font-size: 0.95rem; font-weight: bold; color: #38bdf8;">🎵 曲リストの追加・曲ごとの個別設定（カウント詳細・長さ・音量）</div>
+        <div style="font-size: 0.95rem; font-weight: bold; color: #38bdf8;">🎵 曲リストの追加・曲ごとの個別設定（コンマ秒カウント・長さ・音量）</div>
         <div style="font-size: 0.76rem; color: #94a3b8; line-height: 1.45;">
-          ※ 各曲のカード内で「カウント音の開始位置（0.1秒単位）・回数/秒数・テンポ・音程・音声ファイル」まで曲ごとに完全個別設定できます。
+          ※ 各曲のカード内で「開始位置・全体の長さ・間隔・1音あたりの長さ」をすべて <strong>0.01秒（コンマ）単位</strong> で個別指定できます。
         </div>
 
         <div class="url-input-col">
@@ -1470,16 +1474,16 @@
         countMode: "end",
         countOffsetSec: 0,
         countLengthMode: "seconds",
-        countDurationSec: 5,
+        countDurationSec: 5.0,
         countBeatCount: 4,
-        countTempoUnit: "bpm",
+        countTempoUnit: "interval_sec",
         countBpm: 120,
         countIntervalSec: 1.0,
         countSoundType: "beep",
         countCustomAudioUrl: "",
         countNormalFreq: 880,
         countFinalFreq: 1320,
-        countNoteLength: "normal",
+        countNoteDurationSec: 0.13,
         countVolume: 70
       },
       {
@@ -1495,22 +1499,26 @@
         countMode: "off",
         countOffsetSec: 0,
         countLengthMode: "seconds",
-        countDurationSec: 3,
+        countDurationSec: 3.0,
         countBeatCount: 3,
-        countTempoUnit: "bpm",
+        countTempoUnit: "interval_sec",
         countBpm: 120,
         countIntervalSec: 1.0,
         countSoundType: "beep",
         countCustomAudioUrl: "",
         countNormalFreq: 880,
         countFinalFreq: 1320,
-        countNoteLength: "normal",
+        countNoteDurationSec: 0.13,
         countVolume: 70
       }
     ];
 
     const DURATION_STEPS = [0, 3, 5, 10, 15, 20, 30, 45, 60, 90, 120];
     const FADE_STEPS = [0, 0.5, 1, 1.5, 2, 3, 4, 5, 7, 10];
+
+    function roundCentisec(v) {
+      return Math.round((Number(v) || 0) * 100) / 100;
+    }
 
     // DOM参照
     const menuToggleBtn = document.getElementById("menuToggleBtn");
@@ -1605,7 +1613,7 @@
     const sfxVolumeSlider = document.getElementById("sfxVolumeSlider");
     const sfxVolumeVal = document.getElementById("sfxVolumeVal");
 
-    // 詳細カウント音設定DOM
+    // 詳細カウント音設定DOM（0.01秒コンマ対応）
     const countPresetChips = document.querySelectorAll(".preset-chip");
     const countTimingMode = document.getElementById("countTimingMode");
     const countCustomOffsetRow = document.getElementById("countCustomOffsetRow");
@@ -1635,7 +1643,7 @@
     const countIntervalSecRow = document.getElementById("countIntervalSecRow");
     const intervalSecMinusBtn = document.getElementById("intervalSecMinusBtn");
     const intervalSecPlusBtn = document.getElementById("intervalSecPlusBtn");
-    const intervalSecDisplay = document.getElementById("intervalSecDisplay");
+    const intervalSecNumberInput = document.getElementById("intervalSecNumberInput");
 
     const countSoundType = document.getElementById("countSoundType");
     const countCustomAudioRow = document.getElementById("countCustomAudioRow");
@@ -1645,7 +1653,10 @@
     const countNormalFreqVal = document.getElementById("countNormalFreqVal");
     const countFinalFreqSlider = document.getElementById("countFinalFreqSlider");
     const countFinalFreqVal = document.getElementById("countFinalFreqVal");
-    const countNoteLengthSelect = document.getElementById("countNoteLengthSelect");
+
+    const noteDurMinusBtn = document.getElementById("noteDurMinusBtn");
+    const noteDurPlusBtn = document.getElementById("noteDurPlusBtn");
+    const noteDurNumberInput = document.getElementById("noteDurNumberInput");
 
     const countVolumeSlider = document.getElementById("countVolumeSlider");
     const countVolumeVal = document.getElementById("countVolumeVal");
@@ -1742,21 +1753,21 @@
     let sfxMasterVolume = savedOpsConfig.sfxMasterVolume;
     let activeSfxAudios = [];
 
-    // ★ 詳細カウント音基本設定
-    let savedCountConfig = JSON.parse(localStorage.getItem("person_sound_count_cfg_v2") || "null") || {
+    // ★ 詳細カウント音基本設定（0.01秒コンマ対応）
+    let savedCountConfig = JSON.parse(localStorage.getItem("person_sound_count_cfg_v3") || "null") || {
       timingMode: "end",
       offsetSec: 0,
       lengthMode: "seconds",
-      durationSec: 5,
+      durationSec: 5.0,
       beatCount: 4,
-      tempoUnit: "bpm",
+      tempoUnit: "interval_sec",
       bpm: 120,
       intervalSec: 1.0,
       soundMode: "beep",
       customAudioUrl: "",
       normalFreq: 880,
       finalFreq: 1320,
-      noteLength: "normal",
+      noteDurationSec: 0.13,
       volume: 0.7
     };
 
@@ -2029,6 +2040,15 @@
     }
 
     function normalizeSongObject(s) {
+      let noteDur = 0.13;
+      if (typeof s.countNoteDurationSec === "number") {
+        noteDur = s.countNoteDurationSec;
+      } else if (s.countNoteLength === "short") {
+        noteDur = 0.07;
+      } else if (s.countNoteLength === "long") {
+        noteDur = 0.25;
+      }
+
       return {
         title: s.title || "無題の曲",
         url: normalizeAudioPath(s.url || ""),
@@ -2040,18 +2060,18 @@
         fadeOut: typeof s.fadeOut === "number" ? s.fadeOut : 2,
         duration: typeof s.duration === "number" ? s.duration : 15,
         countMode: ["global", "end", "start", "custom_sec", "before_end_sec", "off"].includes(s.countMode) ? s.countMode : "global",
-        countOffsetSec: typeof s.countOffsetSec === "number" ? s.countOffsetSec : 0,
+        countOffsetSec: typeof s.countOffsetSec === "number" ? roundCentisec(s.countOffsetSec) : 0,
         countLengthMode: ["seconds", "beats"].includes(s.countLengthMode) ? s.countLengthMode : "seconds",
-        countDurationSec: typeof s.countDurationSec === "number" ? s.countDurationSec : 5,
+        countDurationSec: typeof s.countDurationSec === "number" ? roundCentisec(s.countDurationSec) : 5.0,
         countBeatCount: typeof s.countBeatCount === "number" ? s.countBeatCount : 4,
-        countTempoUnit: ["bpm", "interval_sec"].includes(s.countTempoUnit) ? s.countTempoUnit : "bpm",
+        countTempoUnit: ["bpm", "interval_sec"].includes(s.countTempoUnit) ? s.countTempoUnit : "interval_sec",
         countBpm: typeof s.countBpm === "number" ? s.countBpm : 120,
-        countIntervalSec: typeof s.countIntervalSec === "number" ? s.countIntervalSec : 1.0,
+        countIntervalSec: typeof s.countIntervalSec === "number" ? roundCentisec(s.countIntervalSec) : 1.0,
         countSoundType: ["beep", "chime", "pop", "wood", "bell", "custom_audio"].includes(s.countSoundType) ? s.countSoundType : "beep",
         countCustomAudioUrl: typeof s.countCustomAudioUrl === "string" ? s.countCustomAudioUrl : "",
         countNormalFreq: typeof s.countNormalFreq === "number" ? s.countNormalFreq : 880,
         countFinalFreq: typeof s.countFinalFreq === "number" ? s.countFinalFreq : 1320,
-        countNoteLength: ["short", "normal", "long"].includes(s.countNoteLength) ? s.countNoteLength : "normal",
+        countNoteDurationSec: roundCentisec(noteDur),
         countVolume: typeof s.countVolume === "number" ? s.countVolume : 70
       };
     }
@@ -2083,7 +2103,7 @@
       localStorage.setItem("person_sound_active_outfits_v1", JSON.stringify(activeEntryOutfits));
       localStorage.setItem("person_sound_walk_cfg_v1", JSON.stringify(savedWalkConfig));
       localStorage.setItem("person_sound_dir_modes_v1", JSON.stringify(savedDirectionModes));
-      localStorage.setItem("person_sound_count_cfg_v2", JSON.stringify(savedCountConfig));
+      localStorage.setItem("person_sound_count_cfg_v3", JSON.stringify(savedCountConfig));
       localStorage.setItem("person_sound_sfx_two_only", JSON.stringify(sfxButtons));
       localStorage.setItem("person_sound_ops_cfg_v1", JSON.stringify(savedOpsConfig));
     }
@@ -2266,7 +2286,7 @@
     });
 
     // ==========================================
-    // ★ カウント音の詳細設定UI同期と保存
+    // ★ カウント音の詳細設定UI同期と保存（0.01秒コンマ対応）
     // ==========================================
     function saveCountConfig() {
       scheduleCloudPush();
@@ -2280,23 +2300,23 @@
       const showOffset = cfg.timingMode === "custom_sec" || cfg.timingMode === "before_end_sec";
       countCustomOffsetRow.style.display = showOffset ? "flex" : "none";
       countOffsetLabel.textContent = cfg.timingMode === "before_end_sec"
-        ? "⏱️ 終了何秒前に終わるか:"
-        : "⏱️ 開始からの秒数 (0.1秒刻み):";
-      countOffsetNumberInput.value = (cfg.offsetSec ?? 0).toFixed(1);
+        ? "⏱️ 終了何秒前まで (0.01秒):"
+        : "⏱️ 開始からの秒数 (0.01秒):";
+      countOffsetNumberInput.value = roundCentisec(cfg.offsetSec ?? 0).toFixed(2);
 
       countLengthMode.value = cfg.lengthMode || "seconds";
       countDurSecRow.style.display = cfg.lengthMode === "seconds" ? "flex" : "none";
       countBeatCountRow.style.display = cfg.lengthMode === "beats" ? "flex" : "none";
-      countDurNumberInput.value = String(cfg.durationSec ?? 5);
+      countDurNumberInput.value = roundCentisec(cfg.durationSec ?? 5.0).toFixed(2);
       countBeatsDisplay.textContent = `${cfg.beatCount ?? 4}回`;
 
-      countTempoUnit.value = cfg.tempoUnit || "bpm";
+      countTempoUnit.value = cfg.tempoUnit || "interval_sec";
       countBpmControlBlock.style.display = cfg.tempoUnit === "bpm" ? "flex" : "none";
       countIntervalSecRow.style.display = cfg.tempoUnit === "interval_sec" ? "flex" : "none";
 
       bpmDisplay.textContent = `${cfg.bpm ?? 120} BPM`;
       bpmSlider.value = String(cfg.bpm ?? 120);
-      intervalSecDisplay.textContent = `${(cfg.intervalSec ?? 1.0).toFixed(1)}秒おき`;
+      intervalSecNumberInput.value = roundCentisec(cfg.intervalSec ?? 1.0).toFixed(2);
 
       countSoundType.value = cfg.soundMode || "beep";
       const isCustomAudio = cfg.soundMode === "custom_audio";
@@ -2308,7 +2328,7 @@
       countNormalFreqVal.textContent = `${cfg.normalFreq ?? 880}Hz`;
       countFinalFreqSlider.value = String(cfg.finalFreq ?? 1320);
       countFinalFreqVal.textContent = `${cfg.finalFreq ?? 1320}Hz`;
-      countNoteLengthSelect.value = cfg.noteLength || "normal";
+      noteDurNumberInput.value = roundCentisec(cfg.noteDurationSec ?? 0.13).toFixed(2);
 
       const volPct = Math.round((cfg.volume ?? 0.7) * 100);
       countVolumeSlider.value = String(volPct);
@@ -2320,23 +2340,23 @@
         const p = chip.dataset.cntPreset;
         if (p === "last3") {
           Object.assign(savedCountConfig, {
-            timingMode: "end", lengthMode: "beats", beatCount: 3, tempoUnit: "interval_sec", intervalSec: 1.0,
-            soundMode: "beep", normalFreq: 880, finalFreq: 1320, noteLength: "normal"
+            timingMode: "end", lengthMode: "beats", beatCount: 3, tempoUnit: "interval_sec", intervalSec: 1.00,
+            soundMode: "beep", normalFreq: 880, finalFreq: 1320, noteDurationSec: 0.13
           });
         } else if (p === "last5_fast") {
           Object.assign(savedCountConfig, {
-            timingMode: "end", lengthMode: "seconds", durationSec: 5, tempoUnit: "bpm", bpm: 150,
-            soundMode: "beep", normalFreq: 980, finalFreq: 1560, noteLength: "short"
+            timingMode: "end", lengthMode: "seconds", durationSec: 5.00, tempoUnit: "interval_sec", intervalSec: 0.40,
+            soundMode: "beep", normalFreq: 980, finalFreq: 1560, noteDurationSec: 0.08
           });
         } else if (p === "intro4") {
           Object.assign(savedCountConfig, {
-            timingMode: "start", lengthMode: "beats", beatCount: 4, tempoUnit: "bpm", bpm: 120,
-            soundMode: "pop", normalFreq: 520, finalFreq: 1040, noteLength: "normal"
+            timingMode: "start", lengthMode: "beats", beatCount: 4, tempoUnit: "interval_sec", intervalSec: 0.50,
+            soundMode: "pop", normalFreq: 520, finalFreq: 1040, noteDurationSec: 0.12
           });
         } else if (p === "chime3") {
           Object.assign(savedCountConfig, {
-            timingMode: "end", lengthMode: "beats", beatCount: 3, tempoUnit: "interval_sec", intervalSec: 1.0,
-            soundMode: "chime", normalFreq: 780, finalFreq: 1050, noteLength: "long"
+            timingMode: "end", lengthMode: "beats", beatCount: 3, tempoUnit: "interval_sec", intervalSec: 1.00,
+            soundMode: "chime", normalFreq: 780, finalFreq: 1050, noteDurationSec: 0.25
           });
         }
         syncCountConfigUI();
@@ -2351,21 +2371,22 @@
       saveCountConfig();
     });
 
+    // 開始オフセット (0.01秒刻み)
     countOffsetMinusBtn.addEventListener("click", () => {
-      savedCountConfig.offsetSec = Math.max(0, +((savedCountConfig.offsetSec || 0) - 0.5).toFixed(1));
+      savedCountConfig.offsetSec = Math.max(0, roundCentisec((savedCountConfig.offsetSec || 0) - 0.01));
       syncCountConfigUI();
       saveCountConfig();
     });
 
     countOffsetPlusBtn.addEventListener("click", () => {
-      savedCountConfig.offsetSec = Math.min(300, +((savedCountConfig.offsetSec || 0) + 0.5).toFixed(1));
+      savedCountConfig.offsetSec = Math.min(300, roundCentisec((savedCountConfig.offsetSec || 0) + 0.01));
       syncCountConfigUI();
       saveCountConfig();
     });
 
     countOffsetNumberInput.addEventListener("change", () => {
       const v = Math.max(0, Math.min(300, parseFloat(countOffsetNumberInput.value) || 0));
-      savedCountConfig.offsetSec = +v.toFixed(1);
+      savedCountConfig.offsetSec = roundCentisec(v);
       syncCountConfigUI();
       saveCountConfig();
     });
@@ -2376,21 +2397,22 @@
       saveCountConfig();
     });
 
+    // 鳴らす全体の長さ (0.01秒刻み)
     countDurMinusBtn.addEventListener("click", () => {
-      savedCountConfig.durationSec = Math.max(0, +((savedCountConfig.durationSec ?? 5) - 0.5).toFixed(1));
+      savedCountConfig.durationSec = Math.max(0, roundCentisec((savedCountConfig.durationSec ?? 5) - 0.01));
       syncCountConfigUI();
       saveCountConfig();
     });
 
     countDurPlusBtn.addEventListener("click", () => {
-      savedCountConfig.durationSec = Math.min(120, +((savedCountConfig.durationSec ?? 5) + 0.5).toFixed(1));
+      savedCountConfig.durationSec = Math.min(120, roundCentisec((savedCountConfig.durationSec ?? 5) + 0.01));
       syncCountConfigUI();
       saveCountConfig();
     });
 
     countDurNumberInput.addEventListener("change", () => {
       const v = Math.max(0, Math.min(120, parseFloat(countDurNumberInput.value) || 0));
-      savedCountConfig.durationSec = +v.toFixed(1);
+      savedCountConfig.durationSec = roundCentisec(v);
       syncCountConfigUI();
       saveCountConfig();
     });
@@ -2423,14 +2445,22 @@
     bpmPlusBtn.addEventListener("click", () => setBpmValue((savedCountConfig.bpm ?? 120) + 1));
     bpmSlider.addEventListener("input", (e) => setBpmValue(parseInt(e.target.value, 10)));
 
+    // 1回ごとの間隔 (0.01秒刻み)
     intervalSecMinusBtn.addEventListener("click", () => {
-      savedCountConfig.intervalSec = Math.max(0.2, +((savedCountConfig.intervalSec ?? 1.0) - 0.1).toFixed(1));
+      savedCountConfig.intervalSec = Math.max(0.05, roundCentisec((savedCountConfig.intervalSec ?? 1.0) - 0.01));
       syncCountConfigUI();
       saveCountConfig();
     });
 
     intervalSecPlusBtn.addEventListener("click", () => {
-      savedCountConfig.intervalSec = Math.min(10.0, +((savedCountConfig.intervalSec ?? 1.0) + 0.1).toFixed(1));
+      savedCountConfig.intervalSec = Math.min(10.0, roundCentisec((savedCountConfig.intervalSec ?? 1.0) + 0.01));
+      syncCountConfigUI();
+      saveCountConfig();
+    });
+
+    intervalSecNumberInput.addEventListener("change", () => {
+      const v = Math.max(0.05, Math.min(10.0, parseFloat(intervalSecNumberInput.value) || 1.0));
+      savedCountConfig.intervalSec = roundCentisec(v);
       syncCountConfigUI();
       saveCountConfig();
     });
@@ -2460,8 +2490,25 @@
       saveCountConfig();
     });
 
-    countNoteLengthSelect.addEventListener("change", () => {
-      savedCountConfig.noteLength = countNoteLengthSelect.value;
+    // 1音あたりの鳴る長さ (0.01秒刻み)
+    noteDurMinusBtn.addEventListener("click", () => {
+      savedCountConfig.noteDurationSec = Math.max(0.03, roundCentisec((savedCountConfig.noteDurationSec ?? 0.13) - 0.01));
+      syncCountConfigUI();
+      saveCountConfig();
+      playSingleCountBeep(false, getEffectiveCountParams(null));
+    });
+
+    noteDurPlusBtn.addEventListener("click", () => {
+      savedCountConfig.noteDurationSec = Math.min(2.00, roundCentisec((savedCountConfig.noteDurationSec ?? 0.13) + 0.01));
+      syncCountConfigUI();
+      saveCountConfig();
+      playSingleCountBeep(false, getEffectiveCountParams(null));
+    });
+
+    noteDurNumberInput.addEventListener("change", () => {
+      const v = Math.max(0.03, Math.min(2.00, parseFloat(noteDurNumberInput.value) || 0.13));
+      savedCountConfig.noteDurationSec = roundCentisec(v);
+      syncCountConfigUI();
       saveCountConfig();
       playSingleCountBeep(false, getEffectiveCountParams(null));
     });
@@ -3133,7 +3180,7 @@
     });
 
     // ==========================================
-    // ★ 高精度カウント音エンジン（Web Audio API ＋ 自作音声ファイル対応）
+    // ★ 高精度カウント音エンジン（0.01秒コンマ単位・Web Audio API ＋ 自作音声ファイル対応）
     // ==========================================
     let audioCtx = null;
     function ensureAudioContext() {
@@ -3151,42 +3198,42 @@
         const c = savedCountConfig;
         return {
           mode: c.timingMode || "end",
-          offsetSec: c.offsetSec ?? 0,
+          offsetSec: roundCentisec(c.offsetSec ?? 0),
           lengthMode: c.lengthMode || "seconds",
-          durationSec: c.durationSec ?? 5,
+          durationSec: roundCentisec(c.durationSec ?? 5.0),
           beatCount: c.beatCount ?? 4,
-          tempoUnit: c.tempoUnit || "bpm",
+          tempoUnit: c.tempoUnit || "interval_sec",
           bpm: c.bpm ?? 120,
-          intervalSec: c.intervalSec ?? 1.0,
+          intervalSec: roundCentisec(c.intervalSec ?? 1.0),
           soundMode: c.soundMode || "beep",
           customAudioUrl: c.customAudioUrl || "",
           normalFreq: c.normalFreq ?? 880,
           finalFreq: c.finalFreq ?? 1320,
-          noteLength: c.noteLength || "normal",
+          noteDurationSec: roundCentisec(c.noteDurationSec ?? 0.13),
           volume: c.volume ?? 0.7
         };
       }
       return {
         mode: song.countMode,
-        offsetSec: song.countOffsetSec ?? 0,
+        offsetSec: roundCentisec(song.countOffsetSec ?? 0),
         lengthMode: song.countLengthMode || "seconds",
-        durationSec: song.countDurationSec ?? 5,
+        durationSec: roundCentisec(song.countDurationSec ?? 5.0),
         beatCount: song.countBeatCount ?? 4,
-        tempoUnit: song.countTempoUnit || "bpm",
+        tempoUnit: song.countTempoUnit || "interval_sec",
         bpm: song.countBpm ?? 120,
-        intervalSec: song.countIntervalSec ?? 1.0,
+        intervalSec: roundCentisec(song.countIntervalSec ?? 1.0),
         soundMode: song.countSoundType || "beep",
         customAudioUrl: song.countCustomAudioUrl || "",
         normalFreq: song.countNormalFreq ?? 880,
         finalFreq: song.countFinalFreq ?? 1320,
-        noteLength: song.countNoteLength || "normal",
+        noteDurationSec: roundCentisec(song.countNoteDurationSec ?? 0.13),
         volume: (typeof song.countVolume === "number" ? song.countVolume : 70) / 100
       };
     }
 
     function computeCountSchedule(songDurationSec, params) {
       const beatIntervalSec = params.tempoUnit === "interval_sec"
-        ? Math.max(0.2, params.intervalSec || 1.0)
+        ? Math.max(0.05, params.intervalSec || 1.0)
         : (60 / Math.max(30, params.bpm || 120));
 
       let totalBeats = 1;
@@ -3194,11 +3241,14 @@
 
       if (params.lengthMode === "beats") {
         totalBeats = Math.max(1, Math.round(params.beatCount || 4));
-        totalSpanSec = (totalBeats - 1) * beatIntervalSec + 0.35;
+        totalSpanSec = (totalBeats - 1) * beatIntervalSec + (params.noteDurationSec || 0.13);
       } else {
-        const dur = Math.max(0, params.durationSec ?? 5);
+        const dur = Math.max(0, params.durationSec ?? 5.0);
         if (dur <= 0) return { totalBeats: 0, delayMs: 0, beatIntervalMs: beatIntervalSec * 1000 };
-        totalBeats = Math.max(1, Math.round(dur / beatIntervalSec));
+        totalBeats = Math.max(1, Math.floor((dur + 0.001) / beatIntervalSec) + 1);
+        if (totalBeats > 1 && (totalBeats - 1) * beatIntervalSec >= dur) {
+          totalBeats--;
+        }
         totalSpanSec = dur;
       }
 
@@ -3221,8 +3271,8 @@
 
       return {
         totalBeats,
-        delayMs: delaySec * 1000,
-        beatIntervalMs: beatIntervalSec * 1000
+        delayMs: Math.round(delaySec * 1000),
+        beatIntervalMs: Math.round(beatIntervalSec * 1000)
       };
     }
 
@@ -3231,7 +3281,6 @@
       const vol = params.volume;
       if (vol <= 0) return;
 
-      // 自作音声ファイルモードの場合
       if (params.soundMode === "custom_audio" && params.customAudioUrl) {
         try {
           const url = resolveSafeAudioUrl(params.customAudioUrl);
@@ -3256,9 +3305,8 @@
       const finalHz = params.finalFreq || 1320;
       const targetHz = isFinal ? finalHz : normalHz;
 
-      const lenMul = params.noteLength === "short" ? 0.55 : (params.noteLength === "long" ? 1.7 : 1.0);
-      const baseDur = isFinal ? 0.24 : 0.13;
-      const dur = Math.max(0.05, Math.min(0.8, baseDur * lenMul));
+      const userNoteDur = Math.max(0.03, Math.min(2.0, params.noteDurationSec || 0.13));
+      const dur = isFinal ? Math.min(2.2, userNoteDur * 1.45) : userNoteDur;
 
       const sMode = params.soundMode;
       if (sMode === "beep") {
@@ -3272,9 +3320,9 @@
         osc.type = "triangle";
         osc.frequency.setValueAtTime(targetHz, now);
         gain.gain.setValueAtTime(peakGain, now);
-        gain.gain.exponentialRampToValueAtTime(0.001, now + dur * 1.45);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + dur * 1.3);
         osc.start(now);
-        osc.stop(now + dur * 1.45 + 0.02);
+        osc.stop(now + dur * 1.3 + 0.02);
       } else if (sMode === "pop") {
         osc.type = "sine";
         osc.frequency.setValueAtTime(targetHz * 0.65, now);
@@ -3288,16 +3336,16 @@
         osc.frequency.setValueAtTime(targetHz * 0.9, now);
         osc.frequency.exponentialRampToValueAtTime(targetHz * 0.45, now + Math.min(0.08, dur));
         gain.gain.setValueAtTime(peakGain * 1.15, now);
-        gain.gain.exponentialRampToValueAtTime(0.001, now + Math.min(0.12, dur));
+        gain.gain.exponentialRampToValueAtTime(0.001, now + dur);
         osc.start(now);
-        osc.stop(now + Math.min(0.14, dur + 0.02));
+        osc.stop(now + dur + 0.02);
       } else if (sMode === "bell") {
         osc.type = "sine";
         osc.frequency.setValueAtTime(targetHz * 1.5, now);
         gain.gain.setValueAtTime(peakGain * 0.85, now);
-        gain.gain.exponentialRampToValueAtTime(0.001, now + dur * 1.8);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + dur * 1.5);
         osc.start(now);
-        osc.stop(now + dur * 1.8 + 0.02);
+        osc.stop(now + dur * 1.5 + 0.02);
       }
     }
 
@@ -3320,7 +3368,6 @@
       const sched = computeCountSchedule(songDurationSec, params);
       if (sched.totalBeats <= 0) return;
 
-      // 音声ファイル単発再生（回数指定なし or custom_audioで1ファイル再生したい場合）
       if (params.soundMode === "custom_audio" && params.customAudioUrl && params.lengthMode === "seconds") {
         countStartTimerId = setTimeout(() => {
           playSingleCountBeep(true, params);
@@ -3521,19 +3568,67 @@
       if (p.mode === "off" || p.volume <= 0 || (p.lengthMode === "seconds" && p.durationSec <= 0)) {
         return "🔇 カウントなし";
       }
-      let posLabel = "最後";
-      if (p.mode === "start") posLabel = "最初から";
-      else if (p.mode === "custom_sec") posLabel = `${p.offsetSec}秒後〜`;
-      else if (p.mode === "before_end_sec") posLabel = `終了${p.offsetSec}秒前迄`;
-      else posLabel = "ラスト";
+      let posLabel = "ラスト";
+      if (p.mode === "start") posLabel = "開始0.00秒〜";
+      else if (p.mode === "custom_sec") posLabel = `${p.offsetSec.toFixed(2)}秒後〜`;
+      else if (p.mode === "before_end_sec") posLabel = `終了${p.offsetSec.toFixed(2)}秒前迄`;
 
-      const lenLabel = p.lengthMode === "beats" ? `${p.beatCount}回` : `${p.durationSec}秒`;
-      const tempoLabel = p.tempoUnit === "interval_sec" ? `${p.intervalSec}秒おき` : `${p.bpm}BPM`;
+      const lenLabel = p.lengthMode === "beats" ? `${p.beatCount}回` : `${p.durationSec.toFixed(2)}秒`;
+      const tempoLabel = p.tempoUnit === "interval_sec" ? `${p.intervalSec.toFixed(2)}秒おき` : `${p.bpm}BPM`;
       return `⏱️ ${posLabel} (${lenLabel} / ${tempoLabel})`;
     }
 
+    // 0.01秒（コンマ）対応の数値入力＋±0.01ステッパー部品生成
+    function createCentisecInputControl(valueSec, minSec, maxSec, suffixStr, onChange) {
+      const wrap = document.createElement("div");
+      wrap.className = "num-control";
+
+      const minusBtn = document.createElement("button");
+      minusBtn.type = "button";
+      minusBtn.className = "step-btn";
+      minusBtn.style.width = "30px";
+      minusBtn.style.height = "30px";
+      minusBtn.textContent = "−";
+
+      const input = document.createElement("input");
+      input.type = "number";
+      input.className = "sec-num-input";
+      input.min = String(minSec);
+      input.max = String(maxSec);
+      input.step = "0.01";
+      input.value = roundCentisec(valueSec).toFixed(2);
+
+      const unitSpan = document.createElement("span");
+      unitSpan.style.fontSize = "0.75rem";
+      unitSpan.style.color = "#94a3b8";
+      unitSpan.textContent = suffixStr;
+
+      const plusBtn = document.createElement("button");
+      plusBtn.type = "button";
+      plusBtn.className = "step-btn";
+      plusBtn.style.width = "30px";
+      plusBtn.style.height = "30px";
+      plusBtn.textContent = "＋";
+
+      const applyVal = (raw) => {
+        const clamped = Math.max(minSec, Math.min(maxSec, roundCentisec(raw)));
+        input.value = clamped.toFixed(2);
+        onChange(clamped);
+      };
+
+      minusBtn.addEventListener("click", () => applyVal((parseFloat(input.value) || 0) - 0.01));
+      plusBtn.addEventListener("click", () => applyVal((parseFloat(input.value) || 0) + 0.01));
+      input.addEventListener("change", () => applyVal(parseFloat(input.value)));
+
+      wrap.appendChild(minusBtn);
+      wrap.appendChild(input);
+      wrap.appendChild(unitSpan);
+      wrap.appendChild(plusBtn);
+      return wrap;
+    }
+
     // ==========================================
-    // 曲リスト描画（1曲ごとの詳細カウント設定付き）
+    // 曲リスト描画（1曲ごとのコンマ秒詳細カウント設定付き）
     // ==========================================
     function renderAllSongLists(playingIdx = currentPlayingIndex) {
       populateDirectionActionSelects();
@@ -3641,7 +3736,7 @@
         ));
         setCard.appendChild(durRow);
 
-        // ★ 1曲ごとの詳細カウント音設定ボックス
+        // ★ 1曲ごとのコンマ秒カウント音設定ボックス
         const countBox = document.createElement("div");
         countBox.className = "sub-box";
 
@@ -3649,7 +3744,7 @@
         countHeader.style.display = "flex";
         countHeader.style.alignItems = "center";
         countHeader.style.justifyContent = "space-between";
-        countHeader.innerHTML = `<div class="sub-box-title count-title">🥁 この曲のカウント音詳細設定</div>`;
+        countHeader.innerHTML = `<div class="sub-box-title count-title">🥁 この曲のカウント音設定（0.01秒単位）</div>`;
 
         const testSongCountBtn = document.createElement("button");
         testSongCountBtn.type = "button";
@@ -3673,9 +3768,9 @@
         cModeSel.innerHTML = `
           <option value="global"${item.countMode === "global" ? " selected" : ""}>全体基本設定を使う</option>
           <option value="end"${item.countMode === "end" ? " selected" : ""}>曲が終わる直前（最後から）</option>
-          <option value="start"${item.countMode === "start" ? " selected" : ""}>曲が始まってすぐ（0.0秒〜）</option>
-          <option value="custom_sec"${item.countMode === "custom_sec" ? " selected" : ""}>開始から指定秒数後に開始</option>
-          <option value="before_end_sec"${item.countMode === "before_end_sec" ? " selected" : ""}>終了の指定秒数前に終了</option>
+          <option value="start"${item.countMode === "start" ? " selected" : ""}>曲が始まってすぐ（0.00秒〜）</option>
+          <option value="custom_sec"${item.countMode === "custom_sec" ? " selected" : ""}>開始から指定コンマ秒後に開始</option>
+          <option value="before_end_sec"${item.countMode === "before_end_sec" ? " selected" : ""}>終了の指定コンマ秒前に終了</option>
           <option value="off"${item.countMode === "off" ? " selected" : ""}>鳴らさない（OFF）</option>
         `;
         cModeSel.addEventListener("change", () => {
@@ -3694,17 +3789,11 @@
             cOffRow.style.justifyContent = "space-between";
             cOffRow.style.fontSize = "0.8rem";
             cOffRow.innerHTML = `<span>${item.countMode === "before_end_sec" ? "終了何秒前まで:" : "開始から何秒後:"}</span>`;
-            cOffRow.appendChild(createStepperControl(
-              `${(item.countOffsetSec || 0).toFixed(1)}秒`,
-              () => {
-                item.countOffsetSec = Math.max(0, +((item.countOffsetSec || 0) - 0.5).toFixed(1));
+            cOffRow.appendChild(createCentisecInputControl(
+              item.countOffsetSec ?? 0, 0, 300, "秒",
+              (val) => {
+                item.countOffsetSec = val;
                 saveSongs();
-                renderAllSongLists();
-              },
-              () => {
-                item.countOffsetSec = Math.min(300, +((item.countOffsetSec || 0) + 0.5).toFixed(1));
-                saveSongs();
-                renderAllSongLists();
               }
             ));
             countBox.appendChild(cOffRow);
@@ -3720,7 +3809,7 @@
           const cLenModeSel = document.createElement("select");
           cLenModeSel.className = "select-input";
           cLenModeSel.innerHTML = `
-            <option value="seconds"${item.countLengthMode === "seconds" ? " selected" : ""}>秒数で指定（〇.〇秒間）</option>
+            <option value="seconds"${item.countLengthMode === "seconds" ? " selected" : ""}>秒数で指定（〇.〇〇秒間）</option>
             <option value="beats"${item.countLengthMode === "beats" ? " selected" : ""}>回数で指定（ちょうど〇回）</option>
           `;
           cLenModeSel.addEventListener("change", () => {
@@ -3758,24 +3847,18 @@
             cDurRow.style.alignItems = "center";
             cDurRow.style.justifyContent = "space-between";
             cDurRow.style.fontSize = "0.8rem";
-            cDurRow.innerHTML = `<span>鳴らす秒数:</span>`;
-            cDurRow.appendChild(createStepperControl(
-              `${(item.countDurationSec ?? 5).toFixed(1)}秒間`,
-              () => {
-                item.countDurationSec = Math.max(0.5, +((item.countDurationSec ?? 5) - 0.5).toFixed(1));
+            cDurRow.innerHTML = `<span>鳴らす全体の長さ:</span>`;
+            cDurRow.appendChild(createCentisecInputControl(
+              item.countDurationSec ?? 5.0, 0.05, 120, "秒間",
+              (val) => {
+                item.countDurationSec = val;
                 saveSongs();
-                renderAllSongLists();
-              },
-              () => {
-                item.countDurationSec = Math.min(120, +((item.countDurationSec ?? 5) + 0.5).toFixed(1));
-                saveSongs();
-                renderAllSongLists();
               }
             ));
             countBox.appendChild(cDurRow);
           }
 
-          // テンポ単位切替（BPM or 秒おき）
+          // テンポ単位切替（コンマ秒おき or BPM）
           const cTempoUnitRow = document.createElement("div");
           cTempoUnitRow.style.display = "flex";
           cTempoUnitRow.style.alignItems = "center";
@@ -3785,8 +3868,8 @@
           const cTempoUnitSel = document.createElement("select");
           cTempoUnitSel.className = "select-input";
           cTempoUnitSel.innerHTML = `
+            <option value="interval_sec"${item.countTempoUnit === "interval_sec" ? " selected" : ""}>〇.〇〇秒おき</option>
             <option value="bpm"${item.countTempoUnit === "bpm" ? " selected" : ""}>BPM指定</option>
-            <option value="interval_sec"${item.countTempoUnit === "interval_sec" ? " selected" : ""}>〇.〇秒おき</option>
           `;
           cTempoUnitSel.addEventListener("change", () => {
             item.countTempoUnit = cTempoUnitSel.value;
@@ -3803,17 +3886,11 @@
             cIntRow.style.justifyContent = "space-between";
             cIntRow.style.fontSize = "0.8rem";
             cIntRow.innerHTML = `<span>鳴らす間隔:</span>`;
-            cIntRow.appendChild(createStepperControl(
-              `${(item.countIntervalSec ?? 1.0).toFixed(1)}秒おき`,
-              () => {
-                item.countIntervalSec = Math.max(0.2, +((item.countIntervalSec ?? 1.0) - 0.1).toFixed(1));
+            cIntRow.appendChild(createCentisecInputControl(
+              item.countIntervalSec ?? 1.0, 0.05, 10.0, "秒おき",
+              (val) => {
+                item.countIntervalSec = val;
                 saveSongs();
-                renderAllSongLists();
-              },
-              () => {
-                item.countIntervalSec = Math.min(10.0, +((item.countIntervalSec ?? 1.0) + 0.1).toFixed(1));
-                saveSongs();
-                renderAllSongLists();
               }
             ));
             countBox.appendChild(cIntRow);
@@ -3888,6 +3965,22 @@
               item.countFinalFreq = v;
               saveSongs();
             }));
+
+            const cNoteDurRow = document.createElement("div");
+            cNoteDurRow.style.display = "flex";
+            cNoteDurRow.style.alignItems = "center";
+            cNoteDurRow.style.justifyContent = "space-between";
+            cNoteDurRow.style.fontSize = "0.8rem";
+            cNoteDurRow.innerHTML = `<span>1音の長さ:</span>`;
+            cNoteDurRow.appendChild(createCentisecInputControl(
+              item.countNoteDurationSec ?? 0.13, 0.03, 2.00, "秒",
+              (val) => {
+                item.countNoteDurationSec = val;
+                saveSongs();
+                playSingleCountBeep(false, getEffectiveCountParams(item));
+              }
+            ));
+            countBox.appendChild(cNoteDurRow);
           }
 
           countBox.appendChild(createVolumeSliderRow("🔊 カウント音量:", item.countVolume, "#34d399", (v) => {
@@ -3968,7 +4061,7 @@
         startInput.type = "number";
         startInput.min = "0";
         startInput.max = "600";
-        startInput.step = "0.5";
+        startInput.step = "0.01";
         startInput.className = "sec-num-input";
         startInput.value = String(item.highlightStart);
 
@@ -3976,13 +4069,13 @@
         endInput.type = "number";
         endInput.min = "0";
         endInput.max = "600";
-        endInput.step = "0.5";
+        endInput.step = "0.01";
         endInput.className = "sec-num-input";
         endInput.value = String(item.highlightEnd);
 
         const updateRange = () => {
-          item.highlightStart = Math.max(0, parseFloat(startInput.value) || 0);
-          item.highlightEnd = Math.max(0, parseFloat(endInput.value) || 0);
+          item.highlightStart = Math.max(0, roundCentisec(parseFloat(startInput.value) || 0));
+          item.highlightEnd = Math.max(0, roundCentisec(parseFloat(endInput.value) || 0));
           saveSongs();
         };
         startInput.addEventListener("change", () => { updateRange(); renderAllSongLists(); });
